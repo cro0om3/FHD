@@ -65,6 +65,49 @@ def _get_ilovepdf_public_key() -> Optional[str]:
     return None
 
 
+def _get_disable_local_fallback() -> bool:
+    """Return whether local fallback should be disabled.
+
+    Checks st.secrets first, then data/stream.toml for a boolean
+    `disable_local_fallback` inside the [ilovepdf] section.
+    """
+    # 1) secrets
+    try:
+        v = st.secrets["ilovepdf"].get("disable_local_fallback", False)
+        if isinstance(v, bool):
+            return v
+        # accept string-y booleans too
+        if isinstance(v, str):
+            return v.strip().lower() in {"1", "true", "yes", "on"}
+    except Exception:
+        pass
+
+    # 2) data/stream.toml
+    try:
+        base = os.path.dirname(__file__)
+        candidate = os.path.join(base, "data", "stream.toml")
+        if os.path.exists(candidate):
+            in_section = False
+            with open(candidate, "r", encoding="utf-8") as f:
+                for raw in f:
+                    line = raw.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if line.startswith("[") and line.endswith("]"):
+                        in_section = line.strip("[]").strip() == "ilovepdf"
+                        continue
+                    if in_section and line.lower().startswith("disable_local_fallback") and "=" in line:
+                        try:
+                            after_eq = line.split("=", 1)[1].strip().strip('"').strip("'")
+                            return after_eq.lower() in {"1", "true", "yes", "on"}
+                        except Exception:
+                            continue
+    except Exception:
+        pass
+
+    return False
+
+
 def _try_local_docx2pdf(docx_bytes: bytes, filename: str) -> Optional[bytes]:
     """Local conversion fallback.
 
@@ -74,8 +117,8 @@ def _try_local_docx2pdf(docx_bytes: bytes, filename: str) -> Optional[bytes]:
     - Any OS: if primary method not available, attempt LibreOffice if present
     """
     # Allow disabling fallback via secrets flag
-    if st.secrets.get("ilovepdf", {}).get("disable_local_fallback", False):
-        _record_error("Local fallback disabled by secrets flag.")
+    if _get_disable_local_fallback():
+        _record_error("Local fallback disabled by configuration.")
         return None
 
     def _try_libreoffice(docx_bytes_inner: bytes, filename_inner: str) -> Optional[bytes]:
@@ -175,6 +218,8 @@ def convert_docx_to_pdf_ilovepdf(docx_bytes: bytes, filename: str) -> Optional[b
     public_key = _get_ilovepdf_public_key()
     if not public_key:
         _record_error("Missing iLovePDF public key. Configure .streamlit/secrets.toml or data/stream.toml.")
+        if _get_disable_local_fallback():
+            return None
         return _try_local_docx2pdf(docx_bytes, filename)
 
     # --- iLovePDF remote flow ---
@@ -183,10 +228,14 @@ def convert_docx_to_pdf_ilovepdf(docx_bytes: bytes, filename: str) -> Optional[b
         auth_resp = requests.post(ILOVEPDF_AUTH_URL, json={"public_key": public_key}, timeout=30)
         if auth_resp.status_code != 200:
             _record_error(f"Auth failed ({auth_resp.status_code}): {auth_resp.text[:120]}")
+            if _get_disable_local_fallback():
+                return None
             return _try_local_docx2pdf(docx_bytes, filename)
         token = auth_resp.json().get("token")
         if not token:
             _record_error("Token missing in auth response.")
+            if _get_disable_local_fallback():
+                return None
             return _try_local_docx2pdf(docx_bytes, filename)
         headers = {"Authorization": f"Bearer {token}"}
 
@@ -194,12 +243,16 @@ def convert_docx_to_pdf_ilovepdf(docx_bytes: bytes, filename: str) -> Optional[b
         task_resp = requests.post(ILOVEPDF_CREATE_TASK_URL, json={"tool": "officepdf"}, headers=headers, timeout=30)
         if task_resp.status_code != 200:
             _record_error(f"Create task failed ({task_resp.status_code}): {task_resp.text[:120]}")
+            if _get_disable_local_fallback():
+                return None
             return _try_local_docx2pdf(docx_bytes, filename)
         tj = task_resp.json()
         task_id = tj.get("task")
         server = tj.get("server")
         if not task_id or not server:
             _record_error("Task or server missing in create-task response.")
+            if _get_disable_local_fallback():
+                return None
             return _try_local_docx2pdf(docx_bytes, filename)
 
         # 3. Upload (field must be files[] per API docs)
@@ -210,6 +263,8 @@ def convert_docx_to_pdf_ilovepdf(docx_bytes: bytes, filename: str) -> Optional[b
         up_resp = requests.post(upload_url, files=files, data=form_data, headers=headers, timeout=120)
         if up_resp.status_code != 200:
             _record_error(f"Upload failed ({up_resp.status_code}): {up_resp.text[:120]}")
+            if _get_disable_local_fallback():
+                return None
             return _try_local_docx2pdf(docx_bytes, filename)
 
         # 4. Process (must include tool)
@@ -218,6 +273,8 @@ def convert_docx_to_pdf_ilovepdf(docx_bytes: bytes, filename: str) -> Optional[b
         proc_resp = requests.post(process_url, json=proc_payload, headers=headers, timeout=180)
         if proc_resp.status_code != 200:
             _record_error(f"Process failed ({proc_resp.status_code}): {proc_resp.text[:120]}")
+            if _get_disable_local_fallback():
+                return None
             return _try_local_docx2pdf(docx_bytes, filename)
 
         # 5. Download
@@ -225,14 +282,20 @@ def convert_docx_to_pdf_ilovepdf(docx_bytes: bytes, filename: str) -> Optional[b
         dl_resp = requests.get(download_url, headers=headers, timeout=180)
         if dl_resp.status_code != 200:
             _record_error(f"Download failed ({dl_resp.status_code}): {dl_resp.text[:120]}")
+            if _get_disable_local_fallback():
+                return None
             return _try_local_docx2pdf(docx_bytes, filename)
 
         return dl_resp.content
     except requests.Timeout:
         _record_error("iLovePDF network timeout; switching to local fallback.")
+        if _get_disable_local_fallback():
+            return None
         return _try_local_docx2pdf(docx_bytes, filename)
     except Exception as e:
         _record_error(f"Unexpected iLovePDF error: {e}; trying local fallback.")
+        if _get_disable_local_fallback():
+            return None
         return _try_local_docx2pdf(docx_bytes, filename)
 
 

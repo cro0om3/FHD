@@ -1,11 +1,4 @@
 [ilovepdf]
 public = "project_public_76fce2d3b963e6cea42259ed7ae2f7c1_VNMyw41d27e6ab10c2e7c7bcce832563d9734"
-secret = "secret_key_6ba93e4c975922008f6d31ed1afbfdbc_yc51wd2784a6cc14bd9526b2fafe6c14294bf"
-
-[email]
-smtp_host = "smtp.example.com"
-smtp_user = "user@example.com"
-smtp_pass = "super-secret"
-
-[app]
-environment = "local"
+# optional: disable local fallback
+disable_local_fallback = true
