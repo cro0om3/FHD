@@ -1,9 +1,6 @@
 import io
 import os
-import sys
 import platform
-import shutil
-import subprocess
 import tempfile
 import requests
 import streamlit as st
@@ -109,80 +106,26 @@ def _get_disable_local_fallback() -> bool:
 
 
 def _try_local_docx2pdf(docx_bytes: bytes, filename: str) -> Optional[bytes]:
-    """Local conversion fallback.
-
-    Priority:
-    - Linux/Unix: try LibreOffice (soffice) headless if available
-    - Windows/Mac: try docx2pdf (requires Microsoft Word)
-    - Any OS: if primary method not available, attempt LibreOffice if present
-    """
-    # Allow disabling fallback via secrets flag
+    """Windows-only local DOCX→PDF using docx2pdf. No Linux/macOS fallback."""
     if _get_disable_local_fallback():
         _record_error("Local fallback disabled by configuration.")
         return None
-
-    def _try_libreoffice(docx_bytes_inner: bytes, filename_inner: str) -> Optional[bytes]:
-        soffice = shutil.which("soffice") or shutil.which("libreoffice") or shutil.which("soffice.bin")
-        if not soffice:
-            _record_error("LibreOffice (soffice) not found on system PATH.")
-            return None
-        try:
-            with tempfile.TemporaryDirectory() as tmp:
-                docx_path = os.path.join(tmp, f"{filename_inner}.docx")
-                pdf_path = os.path.join(tmp, f"{filename_inner}.pdf")
-                with open(docx_path, "wb") as f:
-                    f.write(docx_bytes_inner)
-                # Run headless conversion
-                proc = subprocess.run(
-                    [soffice, "--headless", "--convert-to", "pdf", "--outdir", tmp, docx_path],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    timeout=180,
-                )
-                if proc.returncode != 0:
-                    _record_error(f"LibreOffice conversion failed (code {proc.returncode}): {proc.stderr.strip()[:200]}")
-                    return None
-                if not os.path.exists(pdf_path):
-                    _record_error("LibreOffice produced no output file.")
-                    return None
-                return open(pdf_path, "rb").read()
-        except subprocess.TimeoutExpired:
-            _record_error("LibreOffice conversion timed out.")
-            return None
-        except Exception as e:
-            _record_error(f"LibreOffice fallback failed: {e}")
-            return None
-
-    system = platform.system()
-    # Prefer LibreOffice on Linux/Unix
-    if system == "Linux" or system == "FreeBSD":
-        lo = _try_libreoffice(docx_bytes, filename)
-        if lo is not None:
-            return lo
-        # If LO not available, no other local option on Linux
+    if platform.system() != "Windows":
+        # Explicitly do nothing on non-Windows per requirements
         return None
-
-    # On Windows or macOS, try docx2pdf first
     try:
         from docx2pdf import convert  # type: ignore
     except Exception:
-        # Try LibreOffice if docx2pdf unavailable
-        lo = _try_libreoffice(docx_bytes, filename)
-        if lo is not None:
-            return lo
-        _record_error("Fallback docx2pdf not available and LibreOffice not found.")
+        _record_error("docx2pdf module not available on Windows.")
         return None
-
     com_inited = False
     try:
-        if system == "Windows":
-            try:
-                import pythoncom  # type: ignore
-                pythoncom.CoInitialize()
-                com_inited = True
-            except Exception as e:
-                _record_error(f"Failed COM init for docx2pdf: {e}")
+        try:
+            import pythoncom  # type: ignore
+            pythoncom.CoInitialize()
+            com_inited = True
+        except Exception as e:
+            _record_error(f"COM init failed: {e}")
         with tempfile.TemporaryDirectory() as tmp:
             docx_path = os.path.join(tmp, f"{filename}.docx")
             pdf_path = os.path.join(tmp, f"{filename}.pdf")
@@ -194,11 +137,7 @@ def _try_local_docx2pdf(docx_bytes: bytes, filename: str) -> Optional[bytes]:
                 return None
             return open(pdf_path, "rb").read()
     except Exception as e:
-        # If docx2pdf failed, try LibreOffice as a secondary option
-        lo = _try_libreoffice(docx_bytes, filename)
-        if lo is not None:
-            return lo
-        _record_error(f"docx2pdf fallback failed: {e}")
+        _record_error(f"docx2pdf error: {e}")
         return None
     finally:
         if com_inited:
@@ -228,32 +167,32 @@ def convert_docx_to_pdf_ilovepdf(docx_bytes: bytes, filename: str) -> Optional[b
         auth_resp = requests.post(ILOVEPDF_AUTH_URL, json={"public_key": public_key}, timeout=30)
         if auth_resp.status_code != 200:
             _record_error(f"Auth failed ({auth_resp.status_code}): {auth_resp.text[:120]}")
-            if _get_disable_local_fallback():
-                return None
-            return _try_local_docx2pdf(docx_bytes, filename)
+            if platform.system() == "Windows" and not _get_disable_local_fallback():
+                return _try_local_docx2pdf(docx_bytes, filename)
+            return None
         token = auth_resp.json().get("token")
         if not token:
             _record_error("Token missing in auth response.")
-            if _get_disable_local_fallback():
-                return None
-            return _try_local_docx2pdf(docx_bytes, filename)
+            if platform.system() == "Windows" and not _get_disable_local_fallback():
+                return _try_local_docx2pdf(docx_bytes, filename)
+            return None
         headers = {"Authorization": f"Bearer {token}"}
 
         # 2. Create task
         task_resp = requests.post(ILOVEPDF_CREATE_TASK_URL, json={"tool": "officepdf"}, headers=headers, timeout=30)
         if task_resp.status_code != 200:
             _record_error(f"Create task failed ({task_resp.status_code}): {task_resp.text[:120]}")
-            if _get_disable_local_fallback():
-                return None
-            return _try_local_docx2pdf(docx_bytes, filename)
+            if platform.system() == "Windows" and not _get_disable_local_fallback():
+                return _try_local_docx2pdf(docx_bytes, filename)
+            return None
         tj = task_resp.json()
         task_id = tj.get("task")
         server = tj.get("server")
         if not task_id or not server:
             _record_error("Task or server missing in create-task response.")
-            if _get_disable_local_fallback():
-                return None
-            return _try_local_docx2pdf(docx_bytes, filename)
+            if platform.system() == "Windows" and not _get_disable_local_fallback():
+                return _try_local_docx2pdf(docx_bytes, filename)
+            return None
 
         # 3. Upload (field must be files[] per API docs)
         upload_url = f"https://{server}/v1/upload"
@@ -263,9 +202,9 @@ def convert_docx_to_pdf_ilovepdf(docx_bytes: bytes, filename: str) -> Optional[b
         up_resp = requests.post(upload_url, files=files, data=form_data, headers=headers, timeout=120)
         if up_resp.status_code != 200:
             _record_error(f"Upload failed ({up_resp.status_code}): {up_resp.text[:120]}")
-            if _get_disable_local_fallback():
-                return None
-            return _try_local_docx2pdf(docx_bytes, filename)
+            if platform.system() == "Windows" and not _get_disable_local_fallback():
+                return _try_local_docx2pdf(docx_bytes, filename)
+            return None
 
         # 4. Process (must include tool)
         process_url = f"https://{server}/v1/process"
@@ -273,30 +212,30 @@ def convert_docx_to_pdf_ilovepdf(docx_bytes: bytes, filename: str) -> Optional[b
         proc_resp = requests.post(process_url, json=proc_payload, headers=headers, timeout=180)
         if proc_resp.status_code != 200:
             _record_error(f"Process failed ({proc_resp.status_code}): {proc_resp.text[:120]}")
-            if _get_disable_local_fallback():
-                return None
-            return _try_local_docx2pdf(docx_bytes, filename)
+            if platform.system() == "Windows" and not _get_disable_local_fallback():
+                return _try_local_docx2pdf(docx_bytes, filename)
+            return None
 
         # 5. Download
         download_url = f"https://{server}/v1/download/{task_id}"
         dl_resp = requests.get(download_url, headers=headers, timeout=180)
         if dl_resp.status_code != 200:
             _record_error(f"Download failed ({dl_resp.status_code}): {dl_resp.text[:120]}")
-            if _get_disable_local_fallback():
-                return None
-            return _try_local_docx2pdf(docx_bytes, filename)
+            if platform.system() == "Windows" and not _get_disable_local_fallback():
+                return _try_local_docx2pdf(docx_bytes, filename)
+            return None
 
         return dl_resp.content
     except requests.Timeout:
-        _record_error("iLovePDF network timeout; switching to local fallback.")
-        if _get_disable_local_fallback():
-            return None
-        return _try_local_docx2pdf(docx_bytes, filename)
+        _record_error("iLovePDF network timeout.")
+        if platform.system() == "Windows" and not _get_disable_local_fallback():
+            return _try_local_docx2pdf(docx_bytes, filename)
+        return None
     except Exception as e:
-        _record_error(f"Unexpected iLovePDF error: {e}; trying local fallback.")
-        if _get_disable_local_fallback():
-            return None
-        return _try_local_docx2pdf(docx_bytes, filename)
+        _record_error(f"Unexpected iLovePDF error: {e}")
+        if platform.system() == "Windows" and not _get_disable_local_fallback():
+            return _try_local_docx2pdf(docx_bytes, filename)
+        return None
 
 
 def trigger_dual_downloads(docx_bytes: bytes, pdf_bytes: Optional[bytes], docx_name: str, pdf_name: Optional[str] = None):
