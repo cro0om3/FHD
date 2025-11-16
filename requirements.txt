@@ -1,0 +1,8 @@
+streamlit
+pandas
+openpyxl
+python-docx
+pillow
+pdfkit
+
+docx2pdf
