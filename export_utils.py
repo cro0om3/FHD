@@ -1,5 +1,9 @@
 import io
 import os
+import sys
+import platform
+import shutil
+import subprocess
 import tempfile
 import requests
 import streamlit as st
@@ -16,20 +20,74 @@ def _record_error(msg: str):
 
 
 def _try_local_docx2pdf(docx_bytes: bytes, filename: str) -> Optional[bytes]:
-    """Fallback using docx2pdf (requires MS Word, Windows/Mac)."""
+    """Local conversion fallback.
+
+    Priority:
+    - Linux/Unix: try LibreOffice (soffice) headless if available
+    - Windows/Mac: try docx2pdf (requires Microsoft Word)
+    - Any OS: if primary method not available, attempt LibreOffice if present
+    """
     # Allow disabling fallback via secrets flag
     if st.secrets.get("ilovepdf", {}).get("disable_local_fallback", False):
         _record_error("Local fallback disabled by secrets flag.")
         return None
+
+    def _try_libreoffice(docx_bytes_inner: bytes, filename_inner: str) -> Optional[bytes]:
+        soffice = shutil.which("soffice") or shutil.which("libreoffice") or shutil.which("soffice.bin")
+        if not soffice:
+            _record_error("LibreOffice (soffice) not found on system PATH.")
+            return None
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                docx_path = os.path.join(tmp, f"{filename_inner}.docx")
+                pdf_path = os.path.join(tmp, f"{filename_inner}.pdf")
+                with open(docx_path, "wb") as f:
+                    f.write(docx_bytes_inner)
+                # Run headless conversion
+                proc = subprocess.run(
+                    [soffice, "--headless", "--convert-to", "pdf", "--outdir", tmp, docx_path],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=180,
+                )
+                if proc.returncode != 0:
+                    _record_error(f"LibreOffice conversion failed (code {proc.returncode}): {proc.stderr.strip()[:200]}")
+                    return None
+                if not os.path.exists(pdf_path):
+                    _record_error("LibreOffice produced no output file.")
+                    return None
+                return open(pdf_path, "rb").read()
+        except subprocess.TimeoutExpired:
+            _record_error("LibreOffice conversion timed out.")
+            return None
+        except Exception as e:
+            _record_error(f"LibreOffice fallback failed: {e}")
+            return None
+
+    system = platform.system()
+    # Prefer LibreOffice on Linux/Unix
+    if system == "Linux" or system == "FreeBSD":
+        lo = _try_libreoffice(docx_bytes, filename)
+        if lo is not None:
+            return lo
+        # If LO not available, no other local option on Linux
+        return None
+
+    # On Windows or macOS, try docx2pdf first
     try:
         from docx2pdf import convert  # type: ignore
     except Exception:
-        _record_error("Fallback docx2pdf not available (module missing).")
+        # Try LibreOffice if docx2pdf unavailable
+        lo = _try_libreoffice(docx_bytes, filename)
+        if lo is not None:
+            return lo
+        _record_error("Fallback docx2pdf not available and LibreOffice not found.")
         return None
-    # On Windows docx2pdf needs COM initialisation (pywin32 / pythoncom)
+
     com_inited = False
     try:
-        if os.name == "nt":
+        if system == "Windows":
             try:
                 import pythoncom  # type: ignore
                 pythoncom.CoInitialize()
@@ -47,6 +105,10 @@ def _try_local_docx2pdf(docx_bytes: bytes, filename: str) -> Optional[bytes]:
                 return None
             return open(pdf_path, "rb").read()
     except Exception as e:
+        # If docx2pdf failed, try LibreOffice as a secondary option
+        lo = _try_libreoffice(docx_bytes, filename)
+        if lo is not None:
+            return lo
         _record_error(f"docx2pdf fallback failed: {e}")
         return None
     finally:
