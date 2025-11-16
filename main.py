@@ -10,56 +10,6 @@ from pages_custom.products_page import products_app
 
 st.set_page_config(page_title="Newton Smart Home OS", layout="wide")
 
-# Read query param to allow URL-driven navigation (e.g., ?page=invoice)
-try:
-    qp = st.experimental_get_query_params()
-    if qp.get("page"):
-        st.session_state["active_page"] = qp.get("page")[0]
-except Exception:
-    pass
-
-# PWA: link manifest and register service worker
-st.markdown(
-    """
-    <link rel="manifest" href="/manifest.json">
-    <script>
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
-            navigator.serviceWorker.register('/sw.js');
-        });
-    }
-    </script>
-    """,
-    unsafe_allow_html=True,
-)
-
-# Universal fix for button stretching and text overflow
-st.markdown(
-    """
-    <style>
-    /* UNIVERSAL FIX FOR BUTTON STRETCH + TEXT OVERFLOW */
-    div.stButton > button {
-        width: auto !important;
-        min-width: 200px !important;
-        max-width: 100% !important;
-        padding: 10px 20px !important;
-        border-radius: 8px !important;
-        font-size: 14px !important;
-        font-weight: 600 !important;
-        white-space: nowrap !important;
-        overflow: hidden !important;
-        text-overflow: ellipsis !important;
-    }
-    /* Prevent column layout from forcing button stretch */
-    div[data-testid="column"] button {
-        width: auto !important;
-        max-width: 100% !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
 # Load logo as data URI
 def _load_logo_datauri():
     candidates = ["data/newton_logo.png", "data/newton_logo.svg", "data/logo.png", "data/logo.svg"]
@@ -266,41 +216,6 @@ st.markdown(
     .product-header span:nth-child(4){flex:1;}
     .product-header span:nth-child(5){flex:0.7;}
     .product-header span:nth-child(6){flex:0.7;}
-
-    /* Mobile responsive adjustments */
-    @media (max-width: 768px) {
-        /* Full width buttons */
-        button, .stButton>button {
-            width: 100% !important;
-            padding: 14px !important;
-            font-size: 18px !important;
-        }
-
-        /* Stack columns vertically (best-effort with Streamlit dynamic classes) */
-        .css-1lcbmhc, .css-12w0qpk {
-            display: block !important;
-            width: 100% !important;
-        }
-
-        /* Make tables scroll horizontally */
-        table { display:block; overflow-x:auto; white-space:nowrap; }
-
-        /* Larger input targets */
-        input, select, textarea {
-            font-size: 18px !important;
-            padding: 14px !important;
-            height: auto !important;
-        }
-
-        /* Streamlit modal dialogs full-width */
-        .stDialog > div{ width: 95vw !important; max-width: 95vw !important; }
-
-        /* Show mobile bottom nav */
-        .mobile-nav { display:flex !important; }
-    }
-
-    /* Hidden by default on desktop */
-    .mobile-nav { display:none; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -308,12 +223,6 @@ st.markdown(
 
 if "active_page" not in st.session_state:
     st.session_state.active_page = "dashboard"
-
-# Helper for other modules if needed
-def is_mobile():
-    ua = st.session_state.get("user_agent", "")
-    keywords = ["iphone", "android", "mobile", "ipad"]
-    return any(k in ua.lower() for k in keywords)
 
 # Page titles mapping
 PAGE_TITLES = {
@@ -323,8 +232,6 @@ PAGE_TITLES = {
     "receipt": ("Newton Receipt", "Acknowledge payments"),
     "customers": ("Customers", "Manage client accounts"),
     "products": ("Products", "Manage catalog"),
-    "inventory": ("Inventory", "Manage stock & catalog"),
-    "whatsapp": ("WhatsApp", "Chat & send documents"),
     "reports": ("Reports", "Business insights"),
     "settings": ("Settings", "Configure application"),
 }
@@ -426,18 +333,6 @@ elif st.session_state.active_page == "customers":
     customers_app()
 elif st.session_state.active_page == "products":
     products_app()
-elif st.session_state.active_page == "inventory":
-    products_app()
-elif st.session_state.active_page == "whatsapp":
-    st.markdown(
-        """
-        <div class="hero-card">
-            <h3 style="margin:0">WhatsApp</h3>
-            <p style="margin:6px 0 0;color:#6e6e73">Mobile-optimized chat placeholder. Coming soon: send documents directly.</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 elif st.session_state.active_page == "reports":
     st.markdown("""
         <div class="hero-card">
@@ -454,29 +349,3 @@ elif st.session_state.active_page == "settings":
     """, unsafe_allow_html=True)
 else:
     dashboard_app()
-
-# Mobile bottom navigation (visible only on small screens via CSS)
-st.markdown(
-    """
-    <div class="mobile-nav" style="
-        position: fixed;
-        bottom: 0; left: 0; right: 0;
-        background: #ffffffcc;
-        backdrop-filter: blur(12px);
-        border-top: 1px solid #ddd;
-        display: none; /* toggled by media query */
-        justify-content: space-around;
-        padding: 10px 0;
-        z-index: 99999;">
-        <a href='?page=dashboard' style='font-size:22px;text-decoration:none'>🏠</a>
-        <a href='?page=quotation' style='font-size:22px;text-decoration:none'>📄</a>
-        <a href='?page=invoice' style='font-size:22px;text-decoration:none'>💳</a>
-        <a href='?page=receipt' style='font-size:22px;text-decoration:none'>🧾</a>
-        <a href='?page=customers' style='font-size:22px;text-decoration:none'>👥</a>
-        <a href='?page=whatsapp' style='font-size:22px;text-decoration:none'>📱</a>
-        <a href='?page=inventory' style='font-size:22px;text-decoration:none'>📦</a>
-        <a href='?page=settings' style='font-size:22px;text-decoration:none'>⚙️</a>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)

@@ -6,7 +6,7 @@ from docx import Document
 from io import BytesIO
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
-from utils.export_utils import save_word_and_pdf
+from export_utils import convert_docx_to_pdf_ilovepdf, trigger_dual_downloads
 
 def proper_case(text):
     if not text:
@@ -523,60 +523,60 @@ def quotation_app():
         "{{grand_total}}": f"{grand_total:,.2f}",
     }
 
-    products_list = st.session_state.product_table.to_dict("records")
+    # Cleaner to remove empty product rows
+    def clean_product_rows(items):
+        cleaned = []
+        for row in items:
+            if any(str(v).strip() for v in row.values()):
+                cleaned.append(row)
+        return cleaned
 
-    try:
-        # Generate DOCX and convert to PDF; save both
-        filled_doc = fill_word_template("data/quotation_template.docx", data_to_fill, products_list)
-        base_filename = f"Quotation_{client_name}_{quote_no}"
-        word_path, pdf_path = save_word_and_pdf(filled_doc, base_filename)
+    products_list = clean_product_rows(st.session_state.product_table.to_dict("records"))
 
-        # Create a new base_id for quotation
-        today_id = datetime.today().strftime('%Y%m%d')
-        existing = load_records()
-        if not existing.empty and "base_id" in existing.columns:
-            same_day = existing[existing.get("base_id", "").astype(str).str.contains(today_id, na=False)]
-            seq = len(same_day) + 1
-        else:
-            seq = 1
-        base_id = f"{today_id}-{str(seq).zfill(3)}"
-
+    # Old design flow: one button triggers generation, then show two stacked downloads
+    if st.button("📄 Download Quotation (Word)"):
         try:
-            save_record({
-                "base_id": base_id,
-                "date": datetime.today().strftime('%Y-%m-%d'),
-                "type": "q",
-                "number": quote_no,
-                "amount": grand_total,
-                "client_name": client_name,
-                "phone": phone_raw,
-                "location": client_location,
-                "note": ""
-            })
-            upsert_customer_from_quotation(client_name, phone_raw, client_location)
-            st.success(f"✅ Saved quotation to records with base {base_id}")
-        except Exception as e:
-            st.warning(f"⚠️ Generated files, but failed to save record: {e}")
+            filled_doc = fill_word_template("data/quotation_template.docx", data_to_fill, products_list)
+            docx_bytes = filled_doc.getvalue()
+            pdf_bytes = convert_docx_to_pdf_ilovepdf(docx_bytes, f"Quotation_{quote_no}")
+            if pdf_bytes is None:
+                st.error("PDF conversion failed.")
+                err = st.session_state.get("ilovepdf_last_error")
+                if err:
+                    st.caption(f"PDF debug: {err}")
 
-        # Download buttons
-        with open(word_path, "rb") as wf:
-            st.download_button(
-                label="📄 Download Word File",
-                data=wf,
-                file_name=f"{base_filename}.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                key="dl_quo_docx"
+            # Save record and customer once on generation
+            today_id = datetime.today().strftime('%Y%m%d')
+            existing = load_records()
+            if not existing.empty and "base_id" in existing.columns:
+                same_day = existing[existing.get("base_id", "").astype(str).str.contains(today_id, na=False)]
+                seq = len(same_day) + 1
+            else:
+                seq = 1
+            base_id = f"{today_id}-{str(seq).zfill(3)}"
+            try:
+                save_record({
+                    "base_id": base_id,
+                    "date": datetime.today().strftime('%Y-%m-%d'),
+                    "type": "q",
+                    "number": quote_no,
+                    "amount": grand_total,
+                    "client_name": client_name,
+                    "phone": phone_raw,
+                    "location": client_location,
+                    "note": ""
+                })
+                upsert_customer_from_quotation(client_name, phone_raw, client_location)
+                st.success(f"✅ Saved quotation to records with base {base_id}")
+            except Exception as e:
+                st.warning(f"⚠️ Generated, but failed to save record: {e}")
+
+            # Auto-download Word then PDF (no extra buttons shown)
+            trigger_dual_downloads(
+                docx_bytes,
+                pdf_bytes,
+                docx_name=f"Quotation_{client_name}_{quote_no}.docx",
+                pdf_name=f"Quotation_{client_name}_{quote_no}.pdf",
             )
-        if pdf_path and os.path.exists(pdf_path):
-            with open(pdf_path, "rb") as pf:
-                st.download_button(
-                    label="📄 Download PDF File",
-                    data=pf,
-                    file_name=f"{base_filename}.pdf",
-                    mime="application/pdf",
-                    key="dl_quo_pdf"
-                )
-        else:
-            st.info("PDF conversion is unavailable in this environment.")
-    except Exception as e:
-        st.error(f"❌ Unable to generate/export files: {e}")
+        except Exception as e:
+            st.error(f"❌ Unable to generate files: {e}")

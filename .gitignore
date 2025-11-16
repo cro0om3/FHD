@@ -31,8 +31,3 @@ data/*.xlsx
 !data/*.docx
 !data/*.png
 !data/*.svg
-data/generated/
-
-# Installers / binaries
-*.msi
-*.exe
