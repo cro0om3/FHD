@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime
 from docx import Document
 from io import BytesIO
+from utils.export_utils import save_word_and_pdf
 
 
 def receipt_app():
@@ -221,28 +222,46 @@ def receipt_app():
             "{{balance}}": f"{remaining:,.2f}",
         }
 
+        # Generate and save DOCX+PDF
         word_file = generate_word("data/receipt_template.docx", data)
+        base_filename = f"Receipt_{receipt_no}"
+        word_path, pdf_path = save_word_and_pdf(word_file, base_filename)
 
-        clicked = st.download_button(
-            label="📄 Download Receipt (Word)",
-            data=word_file,
-            file_name=f"Receipt_{receipt_no}.docx"
-        )
+        # Save record immediately
+        try:
+            save_record({
+                "base_id": base_id,
+                "date": datetime.today().strftime('%Y-%m-%d'),
+                "type": "r",
+                "number": receipt_no,
+                "amount": payment,
+                "client_name": inv.get("client_name",""),
+                "phone": inv.get("phone",""),
+                "location": inv.get("location",""),
+                "note": ""
+            })
+            st.success(f"✅ Saved receipt {receipt_no}")
+        except Exception as e:
+            st.warning(f"⚠️ Generated files, but failed to save record: {e}")
 
-        if clicked:
-            try:
-                save_record({
-                    "base_id": base_id,
-                    "date": datetime.today().strftime('%Y-%m-%d'),
-                    "type": "r",
-                    "number": receipt_no,
-                    "amount": payment,
-                    "client_name": inv.get("client_name",""),
-                    "phone": inv.get("phone",""),
-                    "location": inv.get("location",""),
-                    "note": ""
-                })
-                st.success(f"✅ Saved receipt {receipt_no}")
-            except Exception as e:
-                st.warning(f"⚠️ Downloaded, but failed to save record: {e}")
+        # Download buttons
+        with open(word_path, "rb") as wf:
+            st.download_button(
+                label="📄 Download Word File",
+                data=wf,
+                file_name=f"{base_filename}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                key="dl_rcpt_docx"
+            )
+        if pdf_path and os.path.exists(pdf_path):
+            with open(pdf_path, "rb") as pf:
+                st.download_button(
+                    label="📄 Download PDF File",
+                    data=pf,
+                    file_name=f"{base_filename}.pdf",
+                    mime="application/pdf",
+                    key="dl_rcpt_pdf"
+                )
+        else:
+            st.info("PDF conversion is unavailable in this environment.")
 

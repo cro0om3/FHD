@@ -6,6 +6,7 @@ from docx import Document
 from io import BytesIO
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
+from utils.export_utils import save_word_and_pdf
 
 def proper_case(text):
     if not text:
@@ -542,46 +543,61 @@ def invoice_app():
     }
 
     try:
+        # Generate Word and immediately save both DOCX+PDF
         word_file = generate_word_invoice("data/invoice_template.docx", data)
+        base_filename = f"Invoice_{invoice_no}"
+        word_path, pdf_path = save_word_and_pdf(word_file, base_filename)
 
-        clicked = st.download_button(
-            label="📄 Download Invoice (Word)",
-            data=word_file,
-            file_name=f"Invoice_{invoice_no}.docx"
-        )
-
-        if clicked:
-            # Determine base_id linkage
-            base_id = None
-            if mode == "From Quotation":
-                try:
-                    q_row = records[records["number"] == st.session_state.get("q_select_inline")].iloc[0]
-                    base_id = q_row.get("base_id", None)
-                except Exception:
-                    base_id = None
-            if not base_id:
-                # Generate a new base id for standalone invoices
-                today_id = datetime.today().strftime('%Y%m%d')
-                same_day = records[records.get("base_id", "").astype(str).str.contains(today_id, na=False)] if not records.empty else pd.DataFrame()
-                seq = len(same_day) + 1
-                base_id = f"{today_id}-{str(seq).zfill(3)}"
-
+        # Save record and upsert customer once files are generated
+        base_id = None
+        if mode == "From Quotation":
             try:
-                save_record({
-                    "base_id": base_id,
-                    "date": datetime.today().strftime('%Y-%m-%d'),
-                    "type": "i",
-                    "number": invoice_no,
-                    "amount": grand_total,
-                    "client_name": client_name,
-                    "phone": phone_raw,
-                    "location": client_location,
-                    "note": st.session_state.get("q_select_inline") or ""
-                })
-                # Auto-add/update the customer so future quotations/invoices link to same record
-                upsert_customer_from_invoice(client_name, phone_raw, client_location)
-                st.success(f"✅ Saved to records as base {base_id}")
-            except Exception as e:
-                st.warning(f"⚠️ Downloaded, but failed to save record: {e}")
+                q_row = records[records["number"] == st.session_state.get("q_select_inline")].iloc[0]
+                base_id = q_row.get("base_id", None)
+            except Exception:
+                base_id = None
+        if not base_id:
+            today_id = datetime.today().strftime('%Y%m%d')
+            same_day = records[records.get("base_id", "").astype(str).str.contains(today_id, na=False)] if not records.empty else pd.DataFrame()
+            seq = len(same_day) + 1
+            base_id = f"{today_id}-{str(seq).zfill(3)}"
+
+        try:
+            save_record({
+                "base_id": base_id,
+                "date": datetime.today().strftime('%Y-%m-%d'),
+                "type": "i",
+                "number": invoice_no,
+                "amount": grand_total,
+                "client_name": client_name,
+                "phone": phone_raw,
+                "location": client_location,
+                "note": st.session_state.get("q_select_inline") or ""
+            })
+            upsert_customer_from_invoice(client_name, phone_raw, client_location)
+            st.success(f"✅ Saved to records as base {base_id}")
+        except Exception as e:
+            st.warning(f"⚠️ Generated files, but failed to save record: {e}")
+
+        # Download buttons
+        with open(word_path, "rb") as wf:
+            st.download_button(
+                label="📄 Download Word File",
+                data=wf,
+                file_name=f"{base_filename}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                key="dl_inv_docx"
+            )
+        if pdf_path and os.path.exists(pdf_path):
+            with open(pdf_path, "rb") as pf:
+                st.download_button(
+                    label="📄 Download PDF File",
+                    data=pf,
+                    file_name=f"{base_filename}.pdf",
+                    mime="application/pdf",
+                    key="dl_inv_pdf"
+                )
+        else:
+            st.info("PDF conversion is unavailable in this environment.")
     except Exception as e:
-        st.error(f"❌ Unable to generate Word file: {e}")
+        st.error(f"❌ Unable to generate/export files: {e}")

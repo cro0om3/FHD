@@ -6,3 +6,6 @@ pillow
 pdfkit
 
 docx2pdf
+requests
+pypandoc
+pandoc

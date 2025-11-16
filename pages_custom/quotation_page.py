@@ -6,6 +6,7 @@ from docx import Document
 from io import BytesIO
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
+from utils.export_utils import save_word_and_pdf
 
 def proper_case(text):
     if not text:
@@ -525,40 +526,57 @@ def quotation_app():
     products_list = st.session_state.product_table.to_dict("records")
 
     try:
+        # Generate DOCX and convert to PDF; save both
         filled_doc = fill_word_template("data/quotation_template.docx", data_to_fill, products_list)
-        clicked = st.download_button(
-            label="📄 Download Quotation (Word)",
-            data=filled_doc,
-            file_name=f"Quotation_{client_name}_{quote_no}.docx"
-        )
+        base_filename = f"Quotation_{client_name}_{quote_no}"
+        word_path, pdf_path = save_word_and_pdf(filled_doc, base_filename)
 
-        if clicked:
-            # Create or reuse base_id (quotation always creates a new one)
-            today_id = datetime.today().strftime('%Y%m%d')
-            existing = load_records()
-            if not existing.empty and "base_id" in existing.columns:
-                same_day = existing[existing.get("base_id", "").astype(str).str.contains(today_id, na=False)]
-                seq = len(same_day) + 1
-            else:
-                seq = 1
-            base_id = f"{today_id}-{str(seq).zfill(3)}"
+        # Create a new base_id for quotation
+        today_id = datetime.today().strftime('%Y%m%d')
+        existing = load_records()
+        if not existing.empty and "base_id" in existing.columns:
+            same_day = existing[existing.get("base_id", "").astype(str).str.contains(today_id, na=False)]
+            seq = len(same_day) + 1
+        else:
+            seq = 1
+        base_id = f"{today_id}-{str(seq).zfill(3)}"
 
-            try:
-                save_record({
-                    "base_id": base_id,
-                    "date": datetime.today().strftime('%Y-%m-%d'),
-                    "type": "q",
-                    "number": quote_no,
-                    "amount": grand_total,
-                    "client_name": client_name,
-                    "phone": phone_raw,
-                    "location": client_location,
-                    "note": ""
-                })
-                # Auto-add/update customer from quotation details
-                upsert_customer_from_quotation(client_name, phone_raw, client_location)
-                st.success(f"✅ Saved quotation to records with base {base_id}")
-            except Exception as e:
-                st.warning(f"⚠️ Downloaded, but failed to save record: {e}")
+        try:
+            save_record({
+                "base_id": base_id,
+                "date": datetime.today().strftime('%Y-%m-%d'),
+                "type": "q",
+                "number": quote_no,
+                "amount": grand_total,
+                "client_name": client_name,
+                "phone": phone_raw,
+                "location": client_location,
+                "note": ""
+            })
+            upsert_customer_from_quotation(client_name, phone_raw, client_location)
+            st.success(f"✅ Saved quotation to records with base {base_id}")
+        except Exception as e:
+            st.warning(f"⚠️ Generated files, but failed to save record: {e}")
+
+        # Download buttons
+        with open(word_path, "rb") as wf:
+            st.download_button(
+                label="📄 Download Word File",
+                data=wf,
+                file_name=f"{base_filename}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                key="dl_quo_docx"
+            )
+        if pdf_path and os.path.exists(pdf_path):
+            with open(pdf_path, "rb") as pf:
+                st.download_button(
+                    label="📄 Download PDF File",
+                    data=pf,
+                    file_name=f"{base_filename}.pdf",
+                    mime="application/pdf",
+                    key="dl_quo_pdf"
+                )
+        else:
+            st.info("PDF conversion is unavailable in this environment.")
     except Exception as e:
-        st.error(f"❌ Unable to generate Word file: {e}")
+        st.error(f"❌ Unable to generate/export files: {e}")
