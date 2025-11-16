@@ -19,6 +19,52 @@ def _record_error(msg: str):
     st.session_state["ilovepdf_last_error"] = msg
 
 
+def _get_ilovepdf_public_key() -> Optional[str]:
+    """Retrieve iLovePDF public key from st.secrets, otherwise fallback to data/stream.toml.
+
+    Streamlit only populates st.secrets from .streamlit/secrets.toml (or host secrets).
+    For portability, we also try reading a project file at data/stream.toml when secrets
+    are not configured in the runtime environment.
+    """
+    # 1) Preferred: Streamlit secrets
+    try:
+        key = st.secrets["ilovepdf"]["public"]
+        if isinstance(key, str) and key.strip():
+            return key.strip()
+    except Exception:
+        pass
+
+    # 2) Fallback: project file data/stream.toml (very lightweight parser)
+    try:
+        base = os.path.dirname(__file__)
+        candidate = os.path.join(base, "data", "stream.toml")
+        if os.path.exists(candidate):
+            in_section = False
+            with open(candidate, "r", encoding="utf-8") as f:
+                for raw in f:
+                    line = raw.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if line.startswith("[") and line.endswith("]"):
+                        # entering/exiting sections
+                        in_section = line.strip("[]").strip() == "ilovepdf"
+                        continue
+                    if in_section and line.lower().startswith("public") and "=" in line:
+                        # parse value between quotes public = "..."
+                        try:
+                            after_eq = line.split("=", 1)[1].strip()
+                            if after_eq.startswith('"') and after_eq.endswith('"'):
+                                val = after_eq.strip('"')
+                                if val:
+                                    return val
+                        except Exception:
+                            continue
+    except Exception:
+        pass
+
+    return None
+
+
 def _try_local_docx2pdf(docx_bytes: bytes, filename: str) -> Optional[bytes]:
     """Local conversion fallback.
 
@@ -126,10 +172,9 @@ def convert_docx_to_pdf_ilovepdf(docx_bytes: bytes, filename: str) -> Optional[b
     Detailed error stored in st.session_state['ilovepdf_last_error'].
     """
     st.session_state.pop("ilovepdf_last_error", None)
-    try:
-        public_key = st.secrets["ilovepdf"]["public"]
-    except Exception:
-        _record_error("Missing ilovepdf public key in secrets.")
+    public_key = _get_ilovepdf_public_key()
+    if not public_key:
+        _record_error("Missing iLovePDF public key. Configure .streamlit/secrets.toml or data/stream.toml.")
         return _try_local_docx2pdf(docx_bytes, filename)
 
     # --- iLovePDF remote flow ---
