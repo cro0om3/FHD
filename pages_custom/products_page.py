@@ -4,6 +4,8 @@ import os
 from io import BytesIO
 from datetime import datetime
 
+
+
 # ==========================================
 # EXCEL FILE AUTO-CREATION
 # ==========================================
@@ -76,9 +78,8 @@ def products_app():
         """
         <style>
         .products-header{
-            display:flex; gap:1rem; padding:8px 0 12px;
-            border-bottom:1px solid rgba(0,0,0,.08); background:transparent;
-            font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#86868b;
+            display:flex; gap:1rem; padding:8px 0 12px; background:transparent;
+            font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase;
             margin-bottom:10px; align-items:center;
         }
         .products-header span{text-align:center;}
@@ -88,8 +89,8 @@ def products_app():
         .products-header span:nth-child(4){flex:1;}
         .products-header span:nth-child(5){flex:1;}
 
-        .added-product-row{ background:#fff; padding:8px 12px; border:1px solid rgba(0,0,0,.08); border-radius:12px; box-shadow:0 2px 6px rgba(0,0,0,.05); }
-        .product-value{ font-weight:600; color:#1d1d1f; }
+        .added-product-row{ padding:8px 12px; border-radius:12px; box-shadow:0 2px 6px rgba(0,0,0,.05); }
+        .product-value{ font-weight:600; }
         </style>
         """,
         unsafe_allow_html=True,

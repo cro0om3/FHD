@@ -23,13 +23,11 @@ dist/
 .coverage
 
 # Streamlit
-# Streamlit (WARNING: secrets will be committed if uncommented)
-# .streamlit/secrets.toml
+.streamlit/secrets.toml
 .streamlit/credentials.toml
 
 # App data (keep templates & logos, ignore runtime Excel data)
-# App data now tracked (Excel & templates)
 data/*.xlsx
-#!data/*.docx
-#!data/*.png
-#!data/*.svg
+!data/*.docx
+!data/*.png
+!data/*.svg

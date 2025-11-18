@@ -6,7 +6,7 @@ from docx import Document
 from io import BytesIO
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
-from export_utils import convert_docx_to_pdf_ilovepdf, trigger_dual_downloads
+
 
 def proper_case(text):
     if not text:
@@ -33,95 +33,27 @@ def invoice_app():
         digits = ''.join(filter(str.isdigit, str(raw_input)))
         if not digits:
             return ""
-        # Handle +97150xxxxxxx style
         if digits.startswith('971') and len(digits) >= 12 and digits[3] == '5':
             return '0' + digits[3:12]
-        # Handle 9-digit starting with 5
         if len(digits) == 9 and digits.startswith('5'):
             return '0' + digits
-        # Already 10 starting with 05
         if len(digits) == 10 and digits.startswith('05'):
             return digits
-        # Fallback to last 10
         return digits[-10:]
+
     def phone_label_mask(raw_input):
         flat = phone_flat10(raw_input)
         return f"{flat} xxxxxxxxxx" if flat else "xxxxxxxxxx"
-    # ===== THEME (match Dashboard/Quotation) =====
+
+    # Page CSS (colors handled globally; keep geometry only)
     st.markdown("""
     <style>
-    :root{--accent:#0a84ff;--accent-light:#5ac8fa;--ink:#1d1d1f;--sub:#6e6e73;--glass:rgba(255,255,255,.85);--glass-border:rgba(0,0,0,.06);}
-    [data-testid="stAppViewContainer"]{
-        background:linear-gradient(180deg,#fafafa 0%,#f0f0f5 100%);
-        color:var(--ink);
-        font-family:"SF Pro Display",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-    }
-    [data-testid="stHeader"]{ background:transparent; }
+    .hero{ border-radius:24px; padding:32px; backdrop-filter:blur(20px); margin-bottom:18px; }
+    .hero h2{ margin:0 0 8px; font-size:32px; font-weight:700; }
+    .hero p{ margin:0; font-size:15px; }
+    .section-title{ font-size:20px; font-weight:700; margin:18px 0 10px; }
 
-    .hero{
-        background:linear-gradient(135deg,rgba(255,255,255,.95) 0%,rgba(248,248,252,.92) 100%);
-        border:1px solid var(--glass-border);
-        border-radius:24px;
-        padding:32px;
-        box-shadow:0 2px 8px rgba(0,0,0,.04),0 12px 32px rgba(0,0,0,.08);
-        backdrop-filter:blur(20px);
-        margin-bottom:18px;
-    }
-    .hero h2{
-        margin:0 0 8px;
-        font-size:32px; font-weight:700;
-        background:linear-gradient(135deg,#1d1d1f 0%,#4a4a4f 100%);
-        -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
-    }
-    .hero p{ margin:0; color:var(--sub); font-size:15px; }
-
-    .section-title{ font-size:20px; font-weight:700; margin:18px 0 10px; color:var(--ink); }
-
-    [data-testid="stTextInput"] input,
-    [data-testid="stNumberInput"] input,
-    [data-testid="stSelectbox"] select{
-        background:#fff!important;border:1px solid rgba(0,0,0,.08)!important;border-radius:12px!important;
-        padding:10px 14px!important;font-size:14px!important;color:var(--ink)!important;box-shadow:0 2px 6px rgba(0,0,0,.04)!important;height:40px!important;
-    }
-    /* Force Streamlit select dropdown (react-select) to white */
-    .stSelectbox div[data-baseweb="select"],
-    .stSelectbox div[role="combobox"],
-    .stSelectbox div[role="listbox"],
-    .stSelectbox [role="option"]{
-        background:#fff !important;
-        color: var(--ink) !important;
-    }
-    /* Ensure the visible control area is white in all states */
-    .stSelectbox div[data-baseweb="select"] > div{
-        background:#fff !important;
-    }
-    .stSelectbox div[role="combobox"] > div{
-        background:#fff !important;
-    }
-    .stSelectbox div[data-baseweb="select"]:focus-within,
-    .stSelectbox div[role="combobox"]:focus-within{
-        background:#fff !important;
-    }
-    .stSelectbox svg{
-        color: var(--ink) !important;
-    }
-    .stSelectbox [role="option"][aria-selected="true"]{
-        background:#f3f4f6 !important;
-        color: var(--ink) !important;
-    }
-    div.stButton>button{
-        background:linear-gradient(145deg,#ffffff 0%,#f9f9fb 100%)!important;border:1px solid rgba(0,0,0,.08)!important;
-        border-radius:12px!important;padding:8px 16px!important;font-size:13px!important;font-weight:600!important;color:var(--ink)!important;
-        box-shadow:0 2px 6px rgba(0,0,0,.05)!important;transition:all .18s ease!important;
-    }
-    div.stButton>button:hover{ transform:translateY(-2px)!important; box-shadow:0 6px 14px rgba(0,0,0,.12)!important; }
-
-    .product-header{
-        display:flex; gap:1rem; padding:8px 0 12px;
-        border-bottom:1px solid rgba(0,0,0,.08); background:transparent;
-        font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#86868b;
-        margin-bottom:10px; align-items:center;
-    }
+    .product-header{ display:flex; gap:1rem; padding:8px 0 12px; background:transparent; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; margin-bottom:10px; align-items:center; }
     .product-header span{text-align:center;}
     .product-header span:nth-child(1){flex:4.5; text-align:left;}
     .product-header span:nth-child(2){flex:0.7;}
@@ -130,11 +62,8 @@ def invoice_app():
     .product-header span:nth-child(5){flex:0.7;}
     .product-header span:nth-child(6){flex:0.7;}
 
-    .added-product-row{
-        background:#ffffff; padding:10px 14px; border:1px solid rgba(0,0,0,.08);
-        border-radius:12px; margin-bottom:6px; box-shadow:0 2px 6px rgba(0,0,0,.05);
-    }
-    .product-value{ font-weight:600; color:var(--ink); }
+    .added-product-row{ padding:10px 14px; border-radius:12px; margin-bottom:6px; box-shadow:0 2px 6px rgba(0,0,0,.05); }
+    .product-value{ font-weight:600; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -415,10 +344,17 @@ def invoice_app():
         product = st.selectbox("Product", catalog["Device"], key="add_prod", label_visibility="collapsed")
         row = catalog[catalog["Device"] == product].iloc[0]
         desc = row["Description"]
+    # Sync defaults when product changes
+    if st.session_state.get("last_prod_inv") != product:
+        st.session_state["price_inv"] = float(row["UnitPrice"])
+        st.session_state["war_inv"] = int(row["Warranty"])
+        st.session_state["qty_inv"] = 1
+        st.session_state["last_prod_inv"] = product
+
     with e[1]:
-        qty = st.number_input("Qty", min_value=1, value=1, step=1, label_visibility="collapsed", key="qty_inv")
+        qty = st.number_input("Qty", min_value=1, value=st.session_state.get("qty_inv", 1), step=1, label_visibility="collapsed", key="qty_inv")
     with e[2]:
-        price = st.number_input("Unit Price (AED)", value=float(row["UnitPrice"]), step=10.0, label_visibility="collapsed", key="price_inv")
+        price = st.number_input("Unit Price (AED)", value=st.session_state.get("price_inv", float(row["UnitPrice"])), step=10.0, label_visibility="collapsed", key="price_inv")
     line_total = qty * price
     with e[3]:
         st.markdown(
@@ -426,7 +362,7 @@ def invoice_app():
             unsafe_allow_html=True
         )
     with e[4]:
-        warranty = st.number_input("Warranty (Years)", min_value=0, value=int(row["Warranty"]), step=1, label_visibility="collapsed", key="war_inv")
+        warranty = st.number_input("Warranty (Years)", min_value=0, value=st.session_state.get("war_inv", int(row["Warranty"])), step=1, label_visibility="collapsed", key="war_inv")
     with e[5]:
         if st.button("✅", key="add_inv_btn"):
             new_item = {
@@ -463,22 +399,22 @@ def invoice_app():
         grand_total = (product_total + installation_cost) - total_discount
         
         st.markdown("""
-        <div style='background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:12px;padding:16px;box-shadow:0 2px 6px rgba(0,0,0,.04);'>
-            <div style='display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.06);'>
-                <span style='font-weight:600;color:#6e6e73;'>Price (AED)</span>
-                <span style='font-weight:700;color:#1d1d1f;'>{:,.2f} AED</span>
+        <div style='background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px;'>
+            <div style='display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border-soft);'>
+                <span style='font-weight:600;color:var(--text-soft);'>Price (AED)</span>
+                <span style='font-weight:700;color:var(--text);'>{:,.2f} AED</span>
             </div>
-            <div style='display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.06);'>
-                <span style='font-weight:600;color:#6e6e73;'>Installation & Operation Devices</span>
-                <span style='font-weight:700;color:#1d1d1f;'>{:,.2f} AED</span>
+            <div style='display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border-soft);'>
+                <span style='font-weight:600;color:var(--text-soft);'>Installation & Operation Devices</span>
+                <span style='font-weight:700;color:var(--text);'>{:,.2f} AED</span>
             </div>
-            <div style='display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(0,0,0,.06);'>
-                <span style='font-weight:600;color:#6e6e73;'>Discount</span>
-                <span style='font-weight:700;color:#1d1d1f;'>-{:,.2f} AED</span>
+            <div style='display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border-soft);'>
+                <span style='font-weight:600;color:var(--text-soft);'>Discount</span>
+                <span style='font-weight:700;color:var(--text);'>-{:,.2f} AED</span>
             </div>
-            <div style='display:flex;justify-content:space-between;padding:15px 0;background:rgba(0,0,0,.02);margin-top:8px;border-radius:8px;padding-left:12px;padding-right:12px;'>
-                <span style='font-weight:700;font-size:16px;color:#1d1d1f;'>TOTAL AMOUNT</span>
-                <span style='font-weight:700;font-size:18px;color:#1d1d1f;'>{:,.2f} AED</span>
+            <div style='display:flex;justify-content:space-between;padding:15px 0;background:var(--bg-input);margin-top:8px;border-radius:8px;padding-left:12px;padding-right:12px;'>
+                <span style='font-weight:700;font-size:16px;color:var(--text);'>TOTAL AMOUNT</span>
+                <span style='font-weight:700;font-size:18px;color:var(--text);'>{:,.2f} AED</span>
             </div>
         </div>
         """.format(product_total, installation_cost, total_discount, grand_total), unsafe_allow_html=True)
@@ -542,18 +478,16 @@ def invoice_app():
         "{{grand_total}}": f"{grand_total:,.2f}",
     }
 
-    # Old design flow: one button triggers generation, then stacked downloads
-    if st.button("📄 Download Invoice (Word)"):
-        try:
-            word_file = generate_word_invoice("data/invoice_template.docx", data)
-            docx_bytes = word_file.getvalue()
-            pdf_bytes = convert_docx_to_pdf_ilovepdf(docx_bytes, f"Invoice_{invoice_no}")
-            if pdf_bytes is None:
-                st.error("PDF conversion failed.")
-                err = st.session_state.get("ilovepdf_last_error")
-                if err:
-                    st.caption(f"PDF debug: {err}")
+    try:
+        word_file = generate_word_invoice("data/invoice_template.docx", data)
 
+        clicked = st.download_button(
+            label="📄 Download Invoice (Word)",
+            data=word_file,
+            file_name=f"Invoice_{invoice_no}.docx"
+        )
+
+        if clicked:
             # Determine base_id linkage
             base_id = None
             if mode == "From Quotation":
@@ -563,10 +497,12 @@ def invoice_app():
                 except Exception:
                     base_id = None
             if not base_id:
+                # Generate a new base id for standalone invoices
                 today_id = datetime.today().strftime('%Y%m%d')
                 same_day = records[records.get("base_id", "").astype(str).str.contains(today_id, na=False)] if not records.empty else pd.DataFrame()
                 seq = len(same_day) + 1
                 base_id = f"{today_id}-{str(seq).zfill(3)}"
+
             try:
                 save_record({
                     "base_id": base_id,
@@ -579,17 +515,10 @@ def invoice_app():
                     "location": client_location,
                     "note": st.session_state.get("q_select_inline") or ""
                 })
+                # Auto-add/update the customer so future quotations/invoices link to same record
                 upsert_customer_from_invoice(client_name, phone_raw, client_location)
                 st.success(f"✅ Saved to records as base {base_id}")
             except Exception as e:
-                st.warning(f"⚠️ Generated, but failed to save record: {e}")
-
-            # Auto-download Word then PDF
-            trigger_dual_downloads(
-                docx_bytes,
-                pdf_bytes,
-                docx_name=f"Invoice_{invoice_no}.docx",
-                pdf_name=f"Invoice_{invoice_no}.pdf",
-            )
-        except Exception as e:
-            st.error(f"❌ Unable to generate files: {e}")
+                st.warning(f"⚠️ Downloaded, but failed to save record: {e}")
+    except Exception as e:
+        st.error(f"❌ Unable to generate Word file: {e}")

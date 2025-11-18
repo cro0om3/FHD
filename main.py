@@ -7,6 +7,121 @@ from pages_custom.receipt_page import receipt_app
 from pages_custom.dashboard_page import dashboard_app
 from pages_custom.customers_page import customers_app
 from pages_custom.products_page import products_app
+from pages_custom.reports_page import reports_app
+from pages_custom.settings_page import settings_app
+
+# ===========================
+# THEME ENGINE (Light/Dark Toggle)
+# ===========================
+# Persist UI theme in session state
+if "ui_theme" not in st.session_state:
+    st.session_state.ui_theme = "light"
+
+light_css = """
+<style>
+:root {
+    --bg-primary: #F5F5F7;
+    --bg-card: #FFFFFF;
+    --bg-input: #FFFFFF;
+    --bg-sidebar: #FFFFFF;
+
+    --text: #1D1D1F;
+    --text-soft: #6E6E73;
+
+    --border: rgba(0,0,0,0.10);
+    --border-soft: rgba(0,0,0,0.06);
+
+    --button: #0A84FF;
+    --button-hover: #5AC8FA;
+
+    --accent: #0A84FF;
+}
+
+/* Selectbox (light) – colors only */
+[data-baseweb="select"] > div {
+    background: var(--bg-input) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+}
+[data-baseweb="select"] span { color: var(--text) !important; }
+[data-baseweb="popover"] {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text) !important;
+    z-index: 9999 !important;
+}
+[data-baseweb="menu-item"]:hover {
+    background: var(--button-hover) !important;
+    color: var(--text) !important;
+}
+[data-baseweb="menu"] li,
+[data-baseweb="menu"] div {
+    color: var(--text) !important;
+    background: var(--bg-card) !important;
+}
+[data-baseweb="menu-item"][aria-selected="true"] {
+    background: var(--accent) !important;
+    color: white !important;
+}
+</style>
+"""
+
+dark_css = """
+<style>
+:root {
+    --bg-primary: #0D0F12;
+    --bg-card: #1A1C20;
+    --bg-input: #1D1F24;
+    --bg-sidebar: #0F1115;
+
+    --text: #F5F5F7;
+    --text-soft: #9A9AA2;
+
+    --border: #2B2D31;
+    --border-soft: rgba(255,255,255,0.08);
+
+    --button: #0A84FF;
+    --button-hover: #5AC8FA;
+
+    --accent: #0A84FF;
+}
+
+/* Selectbox (dark) – colors only */
+[data-baseweb="select"] > div {
+    background: var(--bg-input) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--border) !important;
+}
+[data-baseweb="select"] span { color: var(--text) !important; }
+[data-baseweb="popover"] {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text) !important;
+    z-index: 9999 !important;
+}
+[data-baseweb="menu-item"]:hover {
+    background: var(--button-hover) !important;
+    color: var(--text) !important;
+}
+[data-baseweb="menu"] li,
+[data-baseweb="menu"] div {
+    color: var(--text) !important;
+    background: var(--bg-card) !important;
+}
+[data-baseweb="menu-item"][aria-selected="true"] {
+    background: var(--accent) !important;
+    color: white !important;
+}
+</style>
+"""
+
+def inject_theme():
+    """Inject the currently selected theme CSS."""
+    if st.session_state.ui_theme == "light":
+        st.markdown(light_css, unsafe_allow_html=True)
+    else:
+        st.markdown(dark_css, unsafe_allow_html=True)
+
 
 st.set_page_config(page_title="Newton Smart Home OS", layout="wide")
 
@@ -51,6 +166,8 @@ st.markdown(
         box-shadow: 0 2px 8px rgba(0,0,0,.04), 0 12px 32px rgba(0,0,0,.08);
         backdrop-filter: blur(20px);
         margin-bottom: 18px;
+        overflow: visible;
+        position: relative;
     }
 
     /* New header layout: left (page title) | center (nav buttons) | right (logo) */
@@ -60,6 +177,7 @@ st.markdown(
         justify-content: space-between;
         gap: 24px;
         margin-bottom: 12px;
+        min-height: 80px;
     }
     
     .page-title-section{
@@ -94,13 +212,16 @@ st.markdown(
         align-items: center;
         justify-content: flex-end;
         min-width: 200px;
+        position: absolute;
+        right: -30px;
+        top: 50%;
+        transform: translateY(-50%);
     }
     
     .logo-badge{
-        width: 120px;
+        width: 350px;
         height: auto;
-        border-radius: 16px;
-        box-shadow: 0 8px 24px rgba(0,0,0,.12);
+        max-height: none;
     }
 
     /* Compact vertical rhythm */
@@ -108,35 +229,35 @@ st.markdown(
     div[data-testid="element-container"]{ margin-bottom: 6px !important; }
     [data-testid="stButton"]{ margin-bottom: 0 !important; }
 
-    /* Nav buttons - adjusted for horizontal layout */
+    /* Global compact buttons (match Invoice page sizing) */
     [data-testid="stButton"] > button{
-        border: none !important;
-        border-radius: 20px !important;
-        padding: 14px 20px !important;
-        font-size: 0.95rem !important;
+        background: linear-gradient(145deg,#ffffff 0%,#f9f9fb 100%) !important;
+        border: 1px solid rgba(0,0,0,.08) !important;
+        border-radius: 12px !important;
+        padding: 8px 16px !important;
+        font-size: 13px !important;
         font-weight: 600 !important;
-        background: linear-gradient(145deg, #ffffff 0%, #f9f9fb 100%) !important;
         color: var(--ink) !important;
-        box-shadow: 0 8px 20px rgba(15,23,42,.12) !important;
-        transition: transform .18s, box-shadow .18s !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,.05) !important;
+        transition: all .18s ease !important;
         white-space: nowrap !important;
     }
     [data-testid="stButton"] > button:hover{
         transform: translateY(-2px) !important;
-        box-shadow: 0 12px 28px rgba(15,23,42,.18) !important;
+        box-shadow: 0 6px 14px rgba(0,0,0,.12) !important;
     }
 
-    /* Uniform sizing for top nav buttons (4 cards) */
+    /* Uniform compact sizing for top nav buttons (4 cards) */
     button[key^="nav_"]{
-        min-height: 48px !important;
-        height: 48px !important;
-        padding: 10px 16px !important;
+        min-height: 44px !important;
+        height: 44px !important;
+        padding: 6px 14px !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        border-radius: 16px !important;
+        border-radius: 12px !important;
         white-space: nowrap !important;
-        font-size: 0.93rem !important;
+        font-size: 13px !important;
         line-height: 1 !important;
     }
     /* Sidebar items consistent height as well */
@@ -150,24 +271,25 @@ st.markdown(
         font-size: 0.93rem !important;
     }
 
-    /* Global form controls to match Invoice theme across all pages */
+    /* Global form controls to match Invoice  pages */
+    /* جميع الحقول تعتمد فقط على متغيرات الثيم */
     [data-testid="stTextInput"] input,
     [data-testid="stNumberInput"] input,
     [data-testid="stSelectbox"] select{
-        background:#fff!important;
-        border:1px solid rgba(0,0,0,.08)!important;
-        border-radius:12px!important;
-        padding:10px 14px!important;
-        font-size:14px!important;
-        color:var(--text-primary)!important;
-        box-shadow:0 2px 6px rgba(0,0,0,.04)!important;
-        height:40px!important;
-        outline:none!important;
+        background: var(--bg-input) !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text) !important;
+        border-radius: 12px !important;
+        padding: 10px 14px !important;
+        font-size: 14px !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,.04) !important;
+        height: 40px !important;
+        outline: none !important;
         transition: border-color .12s ease, box-shadow .12s ease !important;
     }
     [data-testid="stTextInput"] input:focus,
     [data-testid="stNumberInput"] input:focus,
-    [data-testid="stSelectbox"] select:focus{
+    [data-testid="stSelectbox"] select:focus {
         border-color: var(--accent) !important;
         box-shadow: 0 0 0 3px rgba(10,132,255,.12) !important;
     }
@@ -180,25 +302,36 @@ st.markdown(
     .stSelectbox div[role="combobox"],
     .stSelectbox div[role="listbox"],
     .stSelectbox [role="option"]{
-        background:#fff !important;
+        background: var(--bg-input) !important;
         color: var(--text-primary) !important;
     }
     .stSelectbox div[data-baseweb="select"] > div,
     .stSelectbox div[role="combobox"] > div{
-        background:#fff !important;
+        background: var(--bg-input) !important;
     }
     .stSelectbox div[data-baseweb="select"]:focus-within,
     .stSelectbox div[role="combobox"]:focus-within{
-        background:#fff !important;
+        background: var(--bg-input) !important;
     }
-    .stSelectbox svg{ color: var(--text-primary) !important; }
+    .stSelectbox svg{ color: var(--text-soft) !important; }
+    /* أزرار + و - تعتمد فقط على متغيرات الثيم */
+    [data-testid="stNumberInput"] button {
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text) !important;
+        border-radius: 8px !important;
+        transition: background .15s;
+    }
+    [data-testid="stNumberInput"] button:hover {
+        background: var(--bg-input) !important;
+    }
     .stSelectbox [role="option"][aria-selected="true"]{
         background:#f3f4f6 !important;
         color: var(--text-primary) !important;
     }
 
     /* Common utility classes from Invoice theme */
-    .section-title{ font-size:20px; font-weight:700; margin:18px 0 10px; color:var(--ink); }
+    .section-title{ font-size:20px; font-weight:700; margin:18px `0 10px; color:var(--ink); }
     .added-product-row{
         background:#ffffff; padding:10px 14px; border:1px solid rgba(0,0,0,.08);
         border-radius:12px; margin-bottom:6px; box-shadow:0 2px 6px rgba(0,0,0,.05);
@@ -216,6 +349,90 @@ st.markdown(
     .product-header span:nth-child(4){flex:1;}
     .product-header span:nth-child(5){flex:0.7;}
     .product-header span:nth-child(6){flex:0.7;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Inject the selected theme AFTER app base CSS so theme wins in cascade
+inject_theme()
+
+# Base color mapping using variables (colors only; no sizes changed)
+st.markdown(
+    """
+    <style>
+    [data-testid="stAppViewContainer"] { background: var(--bg-primary) !important; color: var(--text) !important; }
+    [data-testid="stHeader"] { color: var(--text) !important; }
+    [data-testid="stSidebar"] { background: var(--bg-sidebar) !important; color: var(--text) !important; }
+
+    .page-subtitle { color: var(--text-soft) !important; }
+    .hero-card { background: var(--bg-card) !important; border: 1px solid var(--border-soft) !important; color: var(--text) !important; }
+
+    /* Generic buttons (neutral). Keep geometry elsewhere; colors from variables */
+    [data-testid=stButton] > button { background: var(--bg-card) !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
+    [data-testid=stButton] > button:hover { background: var(--button-hover) !important; color: #ffffff !important; }
+
+    /* Nav buttons (default neutral, active accent) */
+    button[key^="nav_"] { background: var(--bg-card) !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
+    button[key^="nav_"]:hover { background: var(--button-hover) !important; color: #ffffff !important; }
+
+    /* Sidebar buttons (default neutral, active accent set below) */
+    button[key^="sidenav_"] { background: var(--bg-card) !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
+    button[key^="sidenav_"]:hover { background: var(--button-hover) !important; color: #ffffff !important; }
+
+    /* Inputs */
+    [data-testid="stTextInput"] input,
+    [data-testid="stNumberInput"] input,
+    [data-testid="stSelectbox"] select,
+    textarea, input, select {
+        background: var(--bg-input) !important; color: var(--text) !important; border: 1px solid var(--border) !important;
+    }
+    [data-testid="stTextInput"] input::placeholder,
+    [data-testid="stNumberInput"] input::placeholder { color: var(--text-soft) !important; }
+
+    /* Streamlit Selectbox (BaseWeb) — ensure dropdown and control use variables */
+    .stSelectbox div[data-baseweb="select"],
+    .stSelectbox div[role="combobox"] {
+        background: var(--bg-input) !important;
+        color: var(--text) !important;
+        border: 1px solid var(--border) !important;
+    }
+    .stSelectbox div[data-baseweb="select"]:focus-within,
+    .stSelectbox div[role="combobox"]:focus-within {
+        border-color: var(--accent) !important;
+    }
+    .stSelectbox svg { color: var(--text) !important; }
+    .stSelectbox [role="listbox"],
+    .stSelectbox [role="option"],
+    [data-baseweb="menu"],
+    [data-baseweb="popover"] [role="listbox"] {
+        background: var(--bg-card) !important;
+        color: var(--text) !important;
+        border: 1px solid var(--border) !important;
+    }
+    .stSelectbox [role="option"][aria-selected="true"],
+    .stSelectbox [role="option"]:hover {
+        background: var(--button-hover) !important;
+        color: #ffffff !important;
+    }
+    .stSelectbox [aria-placeholder="true"],
+    .stSelectbox [data-baseweb="select"] [class*="placeholder"],
+    .stSelectbox [role="combobox"] [class*="placeholder"] {
+        color: var(--text-soft) !important;
+    }
+
+    /* Horizontal rule under subheaders or sections */
+    [data-testid="stMarkdownContainer"] hr, hr { border: none !important; border-top: 1px solid var(--border-soft) !important; }
+
+    /* Tables */
+    [data-testid="stTable"] table { background: var(--bg-card) !important; color: var(--text) !important; }
+    [data-testid="stTable"] th { color: var(--text-soft) !important; border-bottom: 1px solid var(--border) !important; }
+    [data-testid="stTable"] td { color: var(--text) !important; border-bottom: 1px solid var(--border-soft) !important; }
+
+    /* Utility */
+    .section-title { color: var(--text) !important; }
+    .added-product-row { background: var(--bg-card) !important; border: 1px solid var(--border-soft) !important; color: var(--text) !important; }
+    .product-header { border-bottom: 1px solid var(--border-soft) !important; color: var(--text-soft) !important; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -264,7 +481,17 @@ st.markdown(
 
 # Sidebar navigation (mirrors top nav)
 with st.sidebar:
-    st.markdown("<div style='font-weight:700;margin-bottom:6px;color:#0f172a;'>Navigation</div>", unsafe_allow_html=True)
+    # Theme toggle
+    if st.session_state.ui_theme == "light":
+        if st.button("🌙 Dark Mode", key="toggle_dark"):
+            st.session_state.ui_theme = "dark"
+            st.rerun()
+    else:
+        if st.button("☀️ Light Mode", key="toggle_light"):
+            st.session_state.ui_theme = "light"
+            st.rerun()
+
+    st.markdown("<div style='font-weight:700;margin:6px 0;color:#0f172a;'>Navigation</div>", unsafe_allow_html=True)
     _side_nav_items = [
         ("dashboard", "⌁ Dashboard"),
         ("quotation", "✦ Quotation"),
@@ -285,9 +512,8 @@ with st.sidebar:
         f"""
         <style>
         button[key=\"sidenav_{st.session_state.active_page}\"] {{
-            background: linear-gradient(140deg, var(--brand-blue), #5bc0ff) !important;
-            color: #fff !important;
-            box-shadow: 0 18px 32px rgba(10,132,255,0.30) !important;
+            background: var(--accent) !important;
+            color: #ffffff !important;
         }}
         </style>
         """,
@@ -314,9 +540,8 @@ st.markdown(
     f"""
     <style>
     button[key="nav_{st.session_state.active_page}"] {{
-        background: linear-gradient(140deg, var(--brand-blue), #5bc0ff) !important;
-        color: #fff !important;
-        box-shadow: 0 30px 55px rgba(10,132,255,0.4) !important;
+        background: var(--accent) !important;
+        color: #ffffff !important;
     }}
     </style>
     """,
@@ -334,18 +559,8 @@ elif st.session_state.active_page == "customers":
 elif st.session_state.active_page == "products":
     products_app()
 elif st.session_state.active_page == "reports":
-    st.markdown("""
-        <div class="hero-card">
-            <h3 style="margin:0">Reports</h3>
-            <p style="margin:6px 0 0;color:#6e6e73">Coming soon: insights and analytics.</p>
-        </div>
-    """, unsafe_allow_html=True)
+    reports_app()
 elif st.session_state.active_page == "settings":
-    st.markdown("""
-        <div class="hero-card">
-            <h3 style="margin:0">Settings</h3>
-            <p style="margin:6px 0 0;color:#6e6e73">Coming soon: application configuration.</p>
-        </div>
-    """, unsafe_allow_html=True)
+    settings_app()
 else:
     dashboard_app()

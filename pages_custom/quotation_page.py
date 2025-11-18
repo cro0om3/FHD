@@ -6,7 +6,12 @@ from docx import Document
 from io import BytesIO
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt
-from export_utils import convert_docx_to_pdf_ilovepdf, trigger_dual_downloads
+import requests
+import base64
+import tempfile
+from streamlit.components.v1 import html as st_html
+import convertapi
+from pathlib import Path
 
 def proper_case(text):
     if not text:
@@ -297,24 +302,30 @@ def quotation_app():
             st.session_state[f"price_val_{entry_idx}"] = float(row["UnitPrice"])
         if f"war_val_{entry_idx}" not in st.session_state:
             st.session_state[f"war_val_{entry_idx}"] = int(row["Warranty"])
+        # Sync price and warranty when product changes
+        last_key = f"last_prod_{entry_idx}"
+        if st.session_state.get(last_key) != product:
+            st.session_state[f"price_val_{entry_idx}"] = float(row["UnitPrice"])
+            st.session_state[f"war_val_{entry_idx}"] = int(row["Warranty"])
+            st.session_state[last_key] = product
 
         with cols[1]:
-            st.session_state[f"qty_val_{entry_idx}"] = st.number_input(
+            st.number_input(
                 "Qty",
                 min_value=1,
                 step=1,
                 value=st.session_state[f"qty_val_{entry_idx}"],
-                key=f"qty_input_{entry_idx}",
+                key=f"qty_val_{entry_idx}",
                 label_visibility="collapsed"
             )
 
         with cols[2]:
-            st.session_state[f"price_val_{entry_idx}"] = st.number_input(
+            st.number_input(
                 "Unit Price (AED)",
                 min_value=0.0,
                 step=10.0,
                 value=st.session_state[f"price_val_{entry_idx}"],
-                key=f"price_input_{entry_idx}",
+                key=f"price_val_{entry_idx}",
                 label_visibility="collapsed"
             )
 
@@ -329,12 +340,12 @@ def quotation_app():
             )
 
         with cols[4]:
-            st.session_state[f"war_val_{entry_idx}"] = st.number_input(
+            st.number_input(
                 "Warranty (Years)",
                 min_value=0,
                 step=1,
                 value=st.session_state[f"war_val_{entry_idx}"],
-                key=f"war_input_{entry_idx}",
+                key=f"war_val_{entry_idx}",
                 label_visibility="collapsed"
             )
 
@@ -355,9 +366,6 @@ def quotation_app():
                     [st.session_state.product_table, pd.DataFrame([new_row])],
                     ignore_index=True
                 )
-                st.session_state[f"qty_val_{entry_idx}"] = 1
-                st.session_state[f"price_val_{entry_idx}"] = float(row["UnitPrice"])
-                st.session_state[f"war_val_{entry_idx}"] = int(row["Warranty"])
                 st.rerun()
 
     st.markdown("---")
@@ -427,10 +435,10 @@ def quotation_app():
             st.session_state["disc_percent_quo_value"] = discount_percent
 
     # =========================
-    # EXPORT
+    # EXPORT HELPERS (on-click only)
     # =========================
-    def fill_word_template(template_path, data, products):
-        doc = Document(template_path)
+    def generate_word_file(data: dict) -> BytesIO:
+        doc = Document("data/quotation_template.docx")
 
         def format_cell(cell, font_name, font_size, align):
             for paragraph in cell.paragraphs:
@@ -450,11 +458,17 @@ def quotation_app():
                         cell.text = new
                         format_cell(cell, "Times New Roman (Headings CS)", 10, WD_ALIGN_PARAGRAPH.LEFT)
 
+        # Insert products from session state
+        products = st.session_state.product_table.to_dict("records") if "product_table" in st.session_state else []
+
         target_table = None
         for table in doc.tables:
-            if table.cell(0, 0).text.strip().lower() in ["item no", "item no."]:
-                target_table = table
-                break
+            try:
+                if table.cell(0, 0).text.strip().lower() in ["item no", "item no."]:
+                    target_table = table
+                    break
+            except Exception:
+                continue
         if not target_table:
             raise Exception("❌ Product table not found")
 
@@ -469,15 +483,16 @@ def quotation_app():
 
         for i, product in enumerate(products):
             row_index = start_row + i
-            if row_index >= last_index: break
+            if row_index >= last_index:
+                break
             row = target_table.rows[row_index]
-            row.cells[0].text = str(product["Item No"])
-            row.cells[1].text = product["Product / Device"]
-            row.cells[2].text = product["Description"]
-            row.cells[3].text = str(product["Qty"])
-            row.cells[4].text = f"{product['Unit Price (AED)']:,.2f}"
-            row.cells[5].text = f"{product['Line Total (AED)']:,.2f}"
-            row.cells[6].text = str(product["Warranty (Years)"])
+            row.cells[0].text = str(product.get("Item No", i + 1))
+            row.cells[1].text = str(product.get("Product / Device", ""))
+            row.cells[2].text = str(product.get("Description", ""))
+            row.cells[3].text = str(product.get("Qty", ""))
+            row.cells[4].text = f"{float(product.get('Unit Price (AED)', 0)):,.2f}"
+            row.cells[5].text = f"{float(product.get('Line Total (AED)', 0)):,.2f}"
+            row.cells[6].text = str(product.get("Warranty (Years)", ""))
             for cell in row.cells:
                 format_cell(cell, "Arial MT", 9, WD_ALIGN_PARAGRAPH.CENTER)
 
@@ -491,8 +506,80 @@ def quotation_app():
         buffer.seek(0)
         return buffer
 
+    def convert_to_pdf(word_buffer: BytesIO) -> bytes:
+        # Use official ConvertAPI SDK; write temp DOCX then convert
+        convertapi.api_credentials = 'HESPs6JNV4IDP62WkWpZe3u7ls8KJA38'
+        with tempfile.TemporaryDirectory() as tmpdir:
+            docx_path = os.path.join(tmpdir, 'quotation.docx')
+            with open(docx_path, 'wb') as f:
+                f.write(word_buffer.getvalue())
+            result = convertapi.convert(
+                'pdf',
+                {
+                    'File': docx_path,
+                    'FileName': 'quotation'
+                },
+                from_format='docx'
+            )
+            saved = result.save_files(tmpdir)
+            if not saved:
+                raise Exception('ConvertAPI returned no files')
+            pdf_path = saved[0]
+            with open(pdf_path, 'rb') as pf:
+                return pf.read()
+
+    def _auto_download(data_bytes: bytes, filename: str, mime: str):
+        b64 = base64.b64encode(data_bytes).decode('utf-8')
+        # Visible fallback link (in case browser blocks auto-download)
+        st.markdown(f"If the download doesn't start, click here: [Download {filename}](data:{mime};base64,{b64})", unsafe_allow_html=True)
+        st_html(f"""
+            <script>
+            (function(){{
+              const b64 = '{b64}';
+              const mime = '{mime}';
+              const fname = '{filename}'.replace(/[^\w\-\./]/g,'_');
+              const byteChars = atob(b64);
+              const byteNumbers = new Array(byteChars.length);
+              for (let i = 0; i < byteChars.length; i++) byteNumbers[i] = byteChars.charCodeAt(i);
+              const byteArray = new Uint8Array(byteNumbers);
+              const blob = new Blob([byteArray], {{type: mime}});
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url; a.download = fname; document.body.appendChild(a); a.click();
+              setTimeout(()=>{{ URL.revokeObjectURL(url); a.remove(); }}, 1000);
+            }})();
+            </script>
+        """, height=0)
+
+    def _save_export_locally(data_bytes: bytes, filename: str) -> str:
+        out_dir = Path('data') / 'exports'
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / filename
+        with open(out_path, 'wb') as f:
+            f.write(data_bytes)
+        return str(out_path)
+
     st.markdown("---")
     st.markdown('<div class="section-title">Export Quotation</div>', unsafe_allow_html=True)
+
+    # Button colors (blue for Word, red for PDF)
+    st.markdown(
+        """
+        <style>
+        div.stButton>button[k="word_action"]{
+            background:linear-gradient(145deg,#0a84ff 0%,#1b6cff 100%)!important;color:#fff!important;
+            border:1px solid rgba(10,132,255,.35)!important;border-radius:12px!important;
+            padding:8px 16px!important;font-weight:700!important;
+        }
+        div.stButton>button[k="pdf_action"]{
+            background:linear-gradient(145deg,#ff3b30 0%,#d70015 100%)!important;color:#fff!important;
+            border:1px solid rgba(255,59,48,.35)!important;border-radius:12px!important;
+            padding:8px 16px!important;font-weight:700!important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Recalculate using the Installation & Discount values (to mirror invoice)
     product_total = st.session_state.product_table["Line Total (AED)"].sum() if not st.session_state.product_table.empty else 0.0
@@ -523,38 +610,30 @@ def quotation_app():
         "{{grand_total}}": f"{grand_total:,.2f}",
     }
 
-    # Cleaner to remove empty product rows
-    def clean_product_rows(items):
-        cleaned = []
-        for row in items:
-            if any(str(v).strip() for v in row.values()):
-                cleaned.append(row)
-        return cleaned
+    # Always show the two action buttons side-by-side
+    b1, b2 = st.columns(2)
 
-    products_list = clean_product_rows(st.session_state.product_table.to_dict("records"))
-
-    # Old design flow: one button triggers generation, then show two stacked downloads
-    if st.button("📄 Download Quotation (Word)"):
+    # Simple, invoice-style: pre-render a download_button for Word
+    with b1:
         try:
-            filled_doc = fill_word_template("data/quotation_template.docx", data_to_fill, products_list)
-            docx_bytes = filled_doc.getvalue()
-            pdf_bytes = convert_docx_to_pdf_ilovepdf(docx_bytes, f"Quotation_{quote_no}")
-            if pdf_bytes is None:
-                st.error("PDF conversion failed.")
-                err = st.session_state.get("ilovepdf_last_error")
-                if err:
-                    st.caption(f"PDF debug: {err}")
-
-            # Save record and customer once on generation
-            today_id = datetime.today().strftime('%Y%m%d')
-            existing = load_records()
-            if not existing.empty and "base_id" in existing.columns:
-                same_day = existing[existing.get("base_id", "").astype(str).str.contains(today_id, na=False)]
-                seq = len(same_day) + 1
-            else:
-                seq = 1
-            base_id = f"{today_id}-{str(seq).zfill(3)}"
-            try:
+            word_ready = generate_word_file(data_to_fill)
+            clicked_word = st.download_button(
+                label="📄 Download Word",
+                data=word_ready.getvalue(),
+                file_name=f"Quotation_{client_name}_{quote_no}.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                key=f"dl_word_{quote_no}"
+            )
+            if clicked_word:
+                # Save record after user downloads (same behavior as invoice)
+                today_id = datetime.today().strftime('%Y%m%d')
+                existing = load_records()
+                if not existing.empty and "base_id" in existing.columns:
+                    same_day = existing[existing.get("base_id", "").astype(str).str.contains(today_id, na=False)]
+                    seq = len(same_day) + 1
+                else:
+                    seq = 1
+                base_id = f"{today_id}-{str(seq).zfill(3)}"
                 save_record({
                     "base_id": base_id,
                     "date": datetime.today().strftime('%Y-%m-%d'),
@@ -568,15 +647,44 @@ def quotation_app():
                 })
                 upsert_customer_from_quotation(client_name, phone_raw, client_location)
                 st.success(f"✅ Saved quotation to records with base {base_id}")
-            except Exception as e:
-                st.warning(f"⚠️ Generated, but failed to save record: {e}")
-
-            # Auto-download Word then PDF (no extra buttons shown)
-            trigger_dual_downloads(
-                docx_bytes,
-                pdf_bytes,
-                docx_name=f"Quotation_{client_name}_{quote_no}.docx",
-                pdf_name=f"Quotation_{client_name}_{quote_no}.pdf",
-            )
         except Exception as e:
-            st.error(f"❌ Unable to generate files: {e}")
+            st.error(f"❌ Unable to prepare Word file: {e}")
+
+    # PDF: keep a click-to-generate then download button for reliability
+    with b2:
+        try:
+            # Pre-generate PDF bytes for single-click download (may take a moment)
+            word_for_pdf = generate_word_file(data_to_fill)
+            pdf_ready = convert_to_pdf(word_for_pdf)
+            clicked_pdf = st.download_button(
+                label="🧾 Download PDF",
+                data=pdf_ready,
+                file_name=f"Quotation_{client_name}_{quote_no}.pdf",
+                mime="application/pdf",
+                key=f"dl_pdf_{quote_no}"
+            )
+            if clicked_pdf:
+                today_id = datetime.today().strftime('%Y%m%d')
+                existing = load_records()
+                if not existing.empty and "base_id" in existing.columns:
+                    same_day = existing[existing.get("base_id", "").astype(str).str.contains(today_id, na=False)]
+                    seq = len(same_day) + 1
+                else:
+                    seq = 1
+                base_id = f"{today_id}-{str(seq).zfill(3)}"
+                save_record({
+                    "base_id": base_id,
+                    "date": datetime.today().strftime('%Y-%m-%d'),
+                    "type": "q",
+                    "number": quote_no,
+                    "amount": grand_total,
+                    "client_name": client_name,
+                    "phone": phone_raw,
+                    "location": client_location,
+                    "note": "PDF"
+                })
+                upsert_customer_from_quotation(client_name, phone_raw, client_location)
+                st.success(f"✅ Saved PDF quotation with base {base_id}")
+        except Exception as e:
+            st.error(f"❌ Unable to prepare PDF: {e}")
+

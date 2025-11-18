@@ -3,7 +3,6 @@ import pandas as pd
 from datetime import datetime
 from docx import Document
 from io import BytesIO
-from export_utils import convert_docx_to_pdf_ilovepdf, trigger_dual_downloads
 
 
 def receipt_app():
@@ -222,17 +221,15 @@ def receipt_app():
             "{{balance}}": f"{remaining:,.2f}",
         }
 
-        # Old design: one button to generate, then show stacked downloads
-        if st.button("📄 Download Receipt (Word)"):
-            word_file = generate_word("data/receipt_template.docx", data)
-            docx_bytes = word_file.getvalue()
-            pdf_bytes = convert_docx_to_pdf_ilovepdf(docx_bytes, f"Receipt_{receipt_no}")
-            if pdf_bytes is None:
-                st.error("PDF conversion failed.")
-                err = st.session_state.get("ilovepdf_last_error")
-                if err:
-                    st.caption(f"PDF debug: {err}")
+        word_file = generate_word("data/receipt_template.docx", data)
 
+        clicked = st.download_button(
+            label="📄 Download Receipt (Word)",
+            data=word_file,
+            file_name=f"Receipt_{receipt_no}.docx"
+        )
+
+        if clicked:
             try:
                 save_record({
                     "base_id": base_id,
@@ -247,12 +244,5 @@ def receipt_app():
                 })
                 st.success(f"✅ Saved receipt {receipt_no}")
             except Exception as e:
-                st.warning(f"⚠️ Generated, but failed to save record: {e}")
-
-            trigger_dual_downloads(
-                docx_bytes,
-                pdf_bytes,
-                docx_name=f"Receipt_{receipt_no}.docx",
-                pdf_name=f"Receipt_{receipt_no}.pdf",
-            )
+                st.warning(f"⚠️ Downloaded, but failed to save record: {e}")
 

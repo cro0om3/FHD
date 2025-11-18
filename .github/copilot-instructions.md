@@ -112,3 +112,5 @@ st.rerun()  # Force UI refresh
 **Product lists** rendered as custom HTML using `.added-product-row` class instead of Streamlit dataframes for better visual control.
 
 **Dynamic forms**: Use `st.session_state.num_entries` counter pattern for multiple product input rows in single form.
+
+and always answer to me with arabic language 
