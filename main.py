@@ -9,6 +9,8 @@ from pages_custom.customers_page import customers_app
 from pages_custom.products_page import products_app
 from pages_custom.reports_page import reports_app
 from pages_custom.settings_page import settings_app
+from utils.auth import validate_pin, can_access_page, is_admin
+from utils.logger import log_event
 
 # ===========================
 # THEME ENGINE (Light/Dark Toggle)
@@ -124,6 +126,60 @@ def inject_theme():
 
 
 st.set_page_config(page_title="Newton Smart Home OS", layout="wide")
+
+# ===========================
+# PIN LOGIN SYSTEM
+# ===========================
+# Initialize session state for authentication
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+if "user" not in st.session_state:
+    st.session_state.user = None
+if "show_pin" not in st.session_state:
+    st.session_state.show_pin = False
+
+# Show login screen if not authenticated
+if not st.session_state.authenticated:
+    st.markdown("""
+        <div style='text-align:center; padding:60px 20px;'>
+            <h1 style='color:var(--accent); font-size:48px; margin-bottom:10px;'>🔐</h1>
+            <h2 style='color:var(--text);'>Newton Smart Home</h2>
+            <p style='color:var(--text-soft);'>Enter your PIN to continue</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        pin_input = st.text_input(
+            "PIN",
+            type="password" if not st.session_state.show_pin else "default",
+            max_chars=6,
+            placeholder="Enter 4-6 digit PIN",
+            label_visibility="collapsed"
+        )
+        
+        show_hide = st.checkbox("Show PIN", value=st.session_state.show_pin, key="show_pin_checkbox")
+        if show_hide != st.session_state.show_pin:
+            st.session_state.show_pin = show_hide
+            st.rerun()
+        
+        if st.button("🔓 Login", use_container_width=True):
+            user_data = validate_pin(pin_input)
+            if user_data:
+                st.session_state.authenticated = True
+                st.session_state.user = user_data
+                log_event(user_data["name"], "Login", "login_success", f"Role: {user_data['role']}")
+                st.success(f"✅ Welcome, {user_data['name']}!")
+                st.rerun()
+            else:
+                log_event("Unknown", "Login", "login_failed", f"Invalid PIN: {pin_input[:2]}***")
+                st.error("❌ Invalid PIN. Please try again.")
+        
+        st.markdown("<div style='text-align:center; margin-top:40px; color:var(--text-soft); font-size:12px;'>Default PINs: Admin=1234, Staff=5678, Viewer=9999</div>", unsafe_allow_html=True)
+    
+    st.stop()
+
+# User is authenticated - continue with app
 
 # Load logo as data URI
 def _load_logo_datauri():
@@ -481,6 +537,26 @@ st.markdown(
 
 # Sidebar navigation (mirrors top nav)
 with st.sidebar:
+    # User info and logout
+    user = st.session_state.get("user", {})
+    user_name = user.get("name", "User")
+    user_role = user.get("role", "viewer")
+    
+    st.markdown(f"""
+        <div style='padding:12px; background:var(--bg-card); border-radius:12px; margin-bottom:16px; border:1px solid var(--border-soft);'>
+            <div style='font-weight:600; color:var(--text);'>👤 {user_name}</div>
+            <div style='font-size:12px; color:var(--text-soft); margin-top:4px;'>Role: {user_role.title()}</div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    if st.button("🚪 Logout", use_container_width=True, key="logout_btn"):
+        log_event(user_name, "System", "logout", f"User logged out")
+        st.session_state.authenticated = False
+        st.session_state.user = None
+        st.rerun()
+    
+    st.markdown("---")
+    
     # Theme toggle
     if st.session_state.ui_theme == "light":
         if st.button("🌙 Dark Mode", key="toggle_dark"):
@@ -503,9 +579,14 @@ with st.sidebar:
         ("settings", "Settings"),
     ]
     for page_id, title in _side_nav_items:
-        if st.button(title, key=f"sidenav_{page_id}", use_container_width=True):
-            st.session_state.active_page = page_id
-            st.rerun()
+        # Check if user has access to this page
+        if not can_access_page(user, page_id):
+            # Show disabled button for pages without access
+            st.markdown(f"<div style='padding:8px; color:var(--text-soft); opacity:0.5;'>{title} 🔒</div>", unsafe_allow_html=True)
+        else:
+            if st.button(title, key=f"sidenav_{page_id}", use_container_width=True):
+                st.session_state.active_page = page_id
+                st.rerun()
 
     # Highlight active in sidebar
     st.markdown(
@@ -548,6 +629,25 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ===========================
+# PAGE ACCESS CONTROL
+# ===========================
+current_page = st.session_state.active_page
+user = st.session_state.get("user", {})
+
+# Check if user has access to current page
+if not can_access_page(user, current_page):
+    log_event(user.get("name", "Unknown"), current_page, "access_denied", f"Attempted to access {current_page}")
+    st.error(f"🔒 Access Denied")
+    st.warning(f"You don't have permission to access the **{current_page.title()}** page.")
+    st.info(f"Your role: **{user.get('role', 'unknown').title()}**")
+    st.markdown("Please contact an administrator if you need access to this page.")
+    st.stop()
+
+# Log successful page access
+log_event(user.get("name", "Unknown"), current_page, "access_granted", f"Opened {current_page} page")
+
+# Route to appropriate page
 if st.session_state.active_page == "quotation":
     quotation_app()
 elif st.session_state.active_page == "invoice":

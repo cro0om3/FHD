@@ -12,6 +12,9 @@ import tempfile
 from streamlit.components.v1 import html as st_html
 import convertapi
 from pathlib import Path
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from utils.logger import log_event
 
 def proper_case(text):
     if not text:
@@ -646,6 +649,10 @@ def quotation_app():
                     "note": ""
                 })
                 upsert_customer_from_quotation(client_name, phone_raw, client_location)
+                # Log quotation creation
+                user = st.session_state.get("user", {})
+                log_event(user.get("name", "Unknown"), "Quotation", "quotation_created", 
+                         f"Client: {client_name}, Amount: {grand_total}")
                 st.success(f"✅ Saved quotation to records with base {base_id}")
         except Exception as e:
             st.error(f"❌ Unable to prepare Word file: {e}")
