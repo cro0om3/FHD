@@ -1,121 +1,279 @@
-# Newton Smart Home - Quotation App
+# ============================================================
+# Newton Smart Home – MASTER PROJECT DOCUMENT + SUPER COPILOT RULES
+# (FINAL MERGED VERSION – READY FOR COPY/PASTE)
+# ============================================================
 
-## Architecture Overview
+# ============================================================
+# 1) ARCHITECTURE OVERVIEW
+# ============================================================
 
-This is a **Streamlit-based business document generator** for Newton Smart Home. The app uses a single-page architecture with client-side navigation via `st.session_state.active_page` instead of Streamlit's native multi-page approach.
+This is a Streamlit-based business document generator for Newton Smart Home.
+The app uses a single-page architecture with client-side navigation via:
+    st.session_state.active_page
 
-**Key Components:**
-- `main.py`: Main entry point with navigation system and global styling
-- `pages_custom/`: Module-based page functions (`quotation_app()`, `invoice_app()`, `receipt_app()`, `dashboard_app()`) 
-- `data/`: Excel database files (`records.xlsx`, `products.xlsx`) and Word templates
+Key Components:
+- main.py → navigation + styling + root controller
+- pages_custom/ → quotation_app(), invoice_app(), receipt_app(), dashboard_app()
+- data/ → Excel DB + Word templates
 
-## Data Architecture
+# ============================================================
+# 2) DATA ARCHITECTURE
+# ============================================================
 
-**Excel-based Database Pattern:**
-- `data/records.xlsx`: Central transaction log with columns: `base_id`, `date`, `type` (q/i/r), `number`, `amount`, `client_name`, `phone`, `location`, `note`
-- `data/products.xlsx`: Product catalog with columns: `ProductName`, `Description`, `UnitPrice`, `Warranty`
-- **No backend database** - all persistence through direct Excel file read/write using `pandas`
+Excel-based DB:
 
-**Record Lifecycle:**
-1. Quotation (type='q') -> Invoice (type='i') -> Receipt (type='r')
-2. All share same `base_id` for tracking relationship
-3. Invoice references quotation number; receipt references invoice number
+data/records.xlsx:
+    base_id, date, type(q/i/r), number, amount, client_name, phone, location, note
 
-## Streamlit Session State Conventions
+data/products.xlsx:
+    ProductName, Description, UnitPrice, Warranty
 
-**Page-specific tables:**
-- `st.session_state.product_table`: Quotation line items (DataFrame)
-- `st.session_state.invoice_table`: Invoice line items (DataFrame)
-- Reset required when switching pages - tables are NOT global
+Lifecycle:
+    Quotation (q) → Invoice (i) → Receipt (r)
+    All share the same base_id
 
-**Navigation:**
-- `st.session_state.active_page`: Current page ("dashboard", "quotation", "invoice", "receipt")
-- Navigation through button clicks triggers `st.rerun()` for page switch
+No backend database → reading/writing through pandas only.
 
-## Document Generation Pattern
+# ============================================================
+# 3) SESSION STATE
+# ============================================================
 
-**All pages use Word template replacement:**
-```python
+Quotation items: st.session_state.product_table
+Invoice items:   st.session_state.invoice_table
+
+Navigation:
+    st.session_state.active_page
+    switch via st.rerun()
+
+Tables reset when switching pages.
+
+# ============================================================
+# 4) DOCUMENT GENERATION (WORD TEMPLATES)
+# ============================================================
+
 from docx import Document
-# 1. Load template from data/<type>_template.docx
-# 2. Replace {{placeholders}} in all table cells
-# 3. Dynamically insert product rows into specific table (identified by "item no" in first row)
-# 4. Delete unused template rows (marked with "last" keyword)
-# 5. Return BytesIO for download button
-```
+# 1. Load template: data/<type>_template.docx
+# 2. Replace {{placeholders}}
+# 3. Insert rows at table containing “item no”
+# 4. Stop at row marked “last”
+# 5. Return BytesIO for download
 
-**Critical**: Product table detection relies on first cell containing "item no" (case-insensitive). The "last" row marker indicates where to stop inserting products.
+Critical:
+    Product table detection → first cell contains “item no”
 
-## Styling System
+# ============================================================
+# 5) UI DESIGN SYSTEM (APPLE STYLE)
+# ============================================================
 
-**Apple-inspired design system** with CSS-in-Python via `st.markdown()`:
-- Glass morphism cards (`.hero`, `.metric`)
-- CSS custom properties: `--accent`, `--ink`, `--sub`, `--glass`
-- Each page module has its own `_apply_*_theme()` function
-- Consistent button styling with hover/active states using gradients
-- Font: "SF Pro Display" fallback chain
+- Glass UI cards (.hero, .metric)
+- CSS variables: --accent, --ink, --sub, --glass
+- Gradient buttons (hover + active)
+- SF Pro Display font stack
+- Active nav button gets gradient
 
-**Navigation styling**: Active page button gets blue gradient via injected CSS targeting `button[key="nav_{page}"]`.
+# ============================================================
+# 6) PHONE FORMATTER
+# ============================================================
 
-## Phone Number Formatting
+User types: "0501234567"
+Display becomes: "+971 50 123 4567"
 
-Quotation page implements `format_phone_input()` that auto-formats as user types:
-- Input: "0501234567" -> Display: "+971 50 123 4567"
-- Strips all non-digits, adds +971 country code
-- Used for `client_phone` field
+Strips all non-digits, adds +971.
 
-## Development Commands
+# ============================================================
+# 7) DEVELOPMENT COMMANDS
+# ============================================================
 
-```powershell
-# Install dependencies
 pip install -r requirements.txt
-
-# Run app (default port 8501)
 streamlit run main.py
-
-# Run on custom port
 streamlit run main.py --server.port 8502
-```
 
-**Note**: `pdfkit` in requirements.txt is legacy - all document generation now uses Word format only.
+pdfkit is deprecated. DOCX only.
 
-## Common Patterns
+# ============================================================
+# 8) COMMON PATTERNS
+# ============================================================
 
-**Loading Excel with fallback:**
-```python
+Loading Excel with fallback:
+--------------------------------
 def load_records():
     try:
         df = pd.read_excel("data/records.xlsx")
-        df.columns = [c.strip().lower() for c in df.columns]  # Normalize columns
+        df.columns = [c.strip().lower() for c in df.columns]
         return df
     except:
-        return pd.DataFrame(columns=["base_id", "date", "type", ...])
-```
+        return pd.DataFrame(columns=[...])
 
-**Adding products to session state table:**
-```python
-new_item = {"Item No": len(st.session_state.product_table) + 1, ...}
-st.session_state.product_table = pd.concat([st.session_state.product_table, pd.DataFrame([new_item])], ignore_index=True)
-st.rerun()  # Force UI refresh
-```
+Adding product:
+--------------------------------
+new_item = {"Item No": len(st.session_state.product_table)+1, ...}
+st.session_state.product_table = pd.concat([...])
+st.rerun()
 
-## File Structure Expectations
+# ============================================================
+# 9) FILE STRUCTURE EXPECTATIONS
+# ============================================================
 
-- Word templates MUST contain `{{placeholder}}` for text replacement
-- Excel files must be in `data/` directory (relative paths hardcoded)
-- Logo files: app searches `data/newton_logo.{png,svg}` then `data/logo.{png,svg}`
+- Word templates require {{placeholders}}
+- Excel stored under /data
+- Logo auto-detected: data/newton_logo.* → data/logo.*
 
-## UI Component Patterns
+# ============================================================
+# 10) UI COMPONENT PATTERNS
+# ============================================================
 
-**Metrics use custom wrapper** (`_metric()` in dashboard) instead of raw `st.metric()` for consistent glass-card styling.
+- Custom metric wrapper instead of st.metric
+- HTML-based product list rows
+- Dynamic forms using num_entries counters
+- CSS injected with st.markdown
 
-**Product lists** rendered as custom HTML using `.added-product-row` class instead of Streamlit dataframes for better visual control.
+# ============================================================
+# 11) SUPER COPILOT RULES
+# ============================================================
 
-**Dynamic forms**: Use `st.session_state.num_entries` counter pattern for multiple product input rows in single form.
+# -------------------------------
+# LANGUAGE RULES
+# -------------------------------
+- All discussion & explanation MUST be in Arabic.
+- All code MUST be in English.
 
-## Assistant Behavior
+# -------------------------------
+# PERMISSION SYSTEM
+# -------------------------------
+Before ANY step, edit, or code:
+    "هل تريد تنفيذ هذا التعديل؟"
 
-- Always ???? ?????? ?????? ???????.
-- ????? ???????? ????????? ????? (???? ????? ?????? ????? Word? ?????? ???????? ???????? ???????).
-- ???? ????? ?????? ????? ??? ???????? ????? ??? `pandas` ?`streamlit` ?`python-docx` ??? ??????? ??????.
-- ??? ????? ????????? ????????? ???? ????? ?????? ?? ??? ??????? ???????? ??? ????? ???? ?? ????? ??????.
+If I say:
+    "نفّذ بدون ما تسأل"
+→ Enter Auto Mode:
+      - execute steps automatically
+      - no questions unless error
+      - continue until I say:
+            "توقف واسأل"
+
+If I say:
+    "توقف واسأل"
+→ return to asking before every step.
+
+# -------------------------------
+# SYSTEM PROTECTION
+# -------------------------------
+Do NOT modify:
+    - main.py
+    - any existing page in pages_custom
+    - Excel files
+    - Word templates
+    - Database structure
+Unless explicit permission is given.
+
+Do NOT refactor entire files.
+Do NOT rewrite whole modules.
+
+# -------------------------------
+# SUPERMAN MODE (ENGINEERING)
+# -------------------------------
+For any feature request:
+    - Provide 3 solutions:
+        (1) simple
+        (2) professional
+        (3) superman-level
+    - Use best practices in Python/Streamlit
+    - Ask clarifying questions if needed
+
+# -------------------------------
+# CARDIAC SURGEON MODE (DEBUGGING)
+# -------------------------------
+If error occurs:
+    1) No instant fix
+    2) Explain likely cause in Arabic
+    3) Ask:
+          "أين ظهر الخطأ؟"
+    4) Request file/line
+    5) Ask deep diagnostic questions:
+          • Did anything change?
+          • Which file version?
+          • Which page?
+    6) After identifying root cause:
+          → Propose ONE fix only
+    7) Ask:
+          "هل تريد تطبيق إصلاح الجذر؟"
+
+# -------------------------------
+# DESIGN MODE (Newton + Salon ERP)
+# -------------------------------
+If design requested:
+    - Present 3 to 6 design ideas:
+        • Apple Style
+        • Minimal
+        • Newton Blue
+        • Card UI
+        • Modern
+        • Glassmorphism
+        • Luxury Salon Rose Gold
+    - Present inspirations from:
+        Dribbble, Behance, Uiverse, Shadcn, Apple Guidelines
+    - Present wireframe textually:
+        • layout
+        • spacing
+        • card structure
+        • behavior
+
+Before applying:
+    "أي تصميم تريد تجربته؟"
+
+Apply ONLY on one Prototype Page.
+
+After applying:
+    "هل تريد تعميم التصميم على كل الصفحات؟"
+
+# -------------------------------
+# OUTPUT FORMAT
+# -------------------------------
+For code:
+    - Return ONLY the modified lines
+    - In fenced code block
+    - No extra commentary
+
+For design:
+    - (Idea 1)
+    - (Idea 2)
+    - (Idea 3)
+    - Include color palettes + component behavior
+
+# -------------------------------
+# SYSTEM KNOWLEDGE (Auto-Loaded)
+# -------------------------------
+Copilot must always understand:
+
+Newton Smart Home:
+    - single-page architecture
+    - session_state navigation
+    - Word template insertion logic
+    - base_id lifecycle
+    - Excel DB pattern
+    - Apple UI system
+
+Salon ERP:
+    - POS billing
+    - service catalog
+    - customer records
+    - commission calculation
+    - inventory deduction
+    - daily receipts
+
+# -------------------------------
+# CREATIVE RULES
+# -------------------------------
+- No repetition of ideas
+- No duplicated designs
+- Every idea must be new
+- If requirement unclear:
+    suggest 3 interpretations
+
+# -------------------------------
+# ACTIVATION
+# -------------------------------
+From now on:
+Follow ALL RULES permanently
+until I say:
+    "Reset Copilot Rules"

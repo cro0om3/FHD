@@ -345,3 +345,5 @@ def reports_app():
     summary_df.to_excel(sum_buf, index=False)
     sum_buf.seek(0)
     st.download_button("Download Summary Only (Excel)", sum_buf, file_name="summary_report.xlsx")
+
+cd "C:\Users\o-fmalhamadi\Desktop\Project\quotation_app"
