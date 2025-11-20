@@ -224,7 +224,7 @@ def receipt_app():
         word_file = generate_word("data/receipt_template.docx", data)
 
         clicked = st.download_button(
-            label="📄 Download Receipt (Word)",
+            label="Download Receipt (Word)",
             data=word_file,
             file_name=f"Receipt_{receipt_no}.docx"
         )

@@ -5,7 +5,7 @@ import os
 from docx import Document
 from io import BytesIO
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Pt
+from docx.shared import Pt, Cm
 import requests
 import base64
 import tempfile
@@ -15,6 +15,7 @@ from pathlib import Path
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from utils.logger import log_event
+from utils.settings import load_settings
 
 def proper_case(text):
     if not text:
@@ -443,6 +444,44 @@ def quotation_app():
     def generate_word_file(data: dict) -> BytesIO:
         doc = Document("data/quotation_template.docx")
 
+        # قراءة أبعاد الصور من الإعدادات (سم)
+        _s = load_settings()
+        _wcm = float(_s.get("quote_product_image_width_cm", 3.49))
+        _hcm = float(_s.get("quote_product_image_height_cm", 1.5))
+
+        # خريطة أسماء المنتجات إلى صورة Base64 أو مسارها الأصلي (إن وُجدت)
+        image_map = {}
+        image_path_map = {}
+        try:
+            if 'ImageBase64' in catalog.columns:
+                image_map = dict(zip(catalog['Device'].astype(str), catalog['ImageBase64']))
+            if 'ImagePath' in catalog.columns:
+                image_path_map = dict(zip(catalog['Device'].astype(str), catalog['ImagePath']))
+        except Exception:
+            image_map = {}
+            image_path_map = {}
+
+        def insert_image_in_cell(cell, b64_str: str, width_cm: float, height_cm: float, img_path: str = None):
+            try:
+                bio = None
+                if img_path and os.path.exists(img_path):
+                    with open(img_path, "rb") as f:
+                        bio = BytesIO(f.read())
+                elif b64_str and not pd.isna(b64_str):
+                    img_bytes = base64.b64decode(b64_str)
+                    bio = BytesIO(img_bytes)
+                if bio is None:
+                    return False
+                # تفريغ محتوى الخلية ثم إدراج الصورة في فقرة محاذاة للوسط
+                cell.text = ""
+                p = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph("")
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                run = p.add_run()
+                run.add_picture(bio, width=Cm(width_cm), height=Cm(height_cm))
+                return True
+            except Exception:
+                return False
+
         def format_cell(cell, font_name, font_size, align):
             for paragraph in cell.paragraphs:
                 paragraph.alignment = align
@@ -490,7 +529,13 @@ def quotation_app():
                 break
             row = target_table.rows[row_index]
             row.cells[0].text = str(product.get("Item No", i + 1))
-            row.cells[1].text = str(product.get("Product / Device", ""))
+            # إدراج الصورة في عمود المنتج إن وُجدت، وإلا نكتب الاسم نصياً
+            prod_name = str(product.get("Product / Device", ""))
+            b64_img = image_map.get(prod_name)
+            img_path = image_path_map.get(prod_name)
+            placed = insert_image_in_cell(row.cells[1], b64_img, _wcm, _hcm, img_path)
+            if not placed:
+                row.cells[1].text = prod_name
             row.cells[2].text = str(product.get("Description", ""))
             row.cells[3].text = str(product.get("Qty", ""))
             row.cells[4].text = f"{float(product.get('Unit Price (AED)', 0)):,.2f}"
@@ -621,7 +666,7 @@ def quotation_app():
         try:
             word_ready = generate_word_file(data_to_fill)
             clicked_word = st.download_button(
-                label="📄 Download Word",
+                label="Download Word",
                 data=word_ready.getvalue(),
                 file_name=f"Quotation_{client_name}_{quote_no}.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -664,7 +709,7 @@ def quotation_app():
             word_for_pdf = generate_word_file(data_to_fill)
             pdf_ready = convert_to_pdf(word_for_pdf)
             clicked_pdf = st.download_button(
-                label="🧾 Download PDF",
+                label="Download PDF",
                 data=pdf_ready,
                 file_name=f"Quotation_{client_name}_{quote_no}.pdf",
                 mime="application/pdf",

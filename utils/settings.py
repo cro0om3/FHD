@@ -14,7 +14,11 @@ DEFAULT_SETTINGS = {
     "default_approved_by": "Manager",
     "contact_email": "info@newtonsmarthome.com",
     "contact_phone": "+971 52 779 0975",
-    "currency": "AED"
+    "currency": "AED",
+    "ui_product_image_width_px": 350,
+    "ui_product_image_height_px": 195,
+    "quote_product_image_width_cm": 3.49,
+    "quote_product_image_height_cm": 1.5
 }
 
 

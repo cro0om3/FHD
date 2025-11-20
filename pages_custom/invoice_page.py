@@ -482,7 +482,7 @@ def invoice_app():
         word_file = generate_word_invoice("data/invoice_template.docx", data)
 
         clicked = st.download_button(
-            label="📄 Download Invoice (Word)",
+            label="Download Invoice (Word)",
             data=word_file,
             file_name=f"Invoice_{invoice_no}.docx"
         )

@@ -504,7 +504,7 @@ def user_management_section(user, user_name):
     """Manage users, roles, permissions."""
     
     if not is_admin(user):
-        st.error("🔒 Administrator privileges required to manage users.")
+        st.error("Administrator privileges required to manage users.")
         return
     
     # Display existing users
@@ -600,7 +600,7 @@ def user_management_section(user, user_name):
     st.markdown('<div class="spacing-md"></div>', unsafe_allow_html=True)
     
     # Delete user section
-    with st.expander("🗑️ Remove User"):
+    with st.expander("Remove User"):
         if not users_df.empty:
             st.warning("⚠️ This action cannot be undone. The user will lose all access immediately.")
             st.markdown('<div class="spacing-sm"></div>', unsafe_allow_html=True)
@@ -624,7 +624,7 @@ def system_config_section(user, user_name):
     """Company info and defaults."""
     
     if not is_admin(user):
-        st.error("🔒 Administrator privileges required to modify system configuration.")
+        st.error("Administrator privileges required to modify system configuration.")
         return
     
     st.markdown('<div class="crm-section-title">Company Information</div>', unsafe_allow_html=True)
@@ -644,14 +644,31 @@ def system_config_section(user, user_name):
         
         st.markdown('<div class="spacing-md"></div>', unsafe_allow_html=True)
         
-        if st.form_submit_button("💾 Save Configuration", type="primary"):
+        st.markdown('<div class="crm-subsection">Product Image Sizes</div>', unsafe_allow_html=True)
+        g1, g2 = st.columns(2)
+        with g1:
+            ui_w = st.number_input("UI Image Width (px)", min_value=40, max_value=800, value=int(settings.get("ui_product_image_width_px", 133)))
+            ui_h = st.number_input("UI Image Height (px)", min_value=30, max_value=800, value=int(settings.get("ui_product_image_height_px", 57)))
+            st.caption("Used in Products page thumbnails")
+        with g2:
+            q_w = st.number_input("Quotation Image Width (cm)", min_value=0.5, max_value=20.0, value=float(settings.get("quote_product_image_width_cm", 3.49)))
+            q_h = st.number_input("Quotation Image Height (cm)", min_value=0.5, max_value=20.0, value=float(settings.get("quote_product_image_height_cm", 1.5)))
+            st.caption("Used in Word quotation table")
+        
+        st.markdown('<div class="spacing-md"></div>', unsafe_allow_html=True)
+        
+        if st.form_submit_button("Save Configuration", type="primary"):
             settings.update({
                 "company_name": company_name,
                 "default_prepared_by": prepared_by,
                 "default_approved_by": approved_by,
                 "contact_email": email,
                 "contact_phone": phone,
-                "currency": currency
+                "currency": currency,
+                "ui_product_image_width_px": int(ui_w),
+                "ui_product_image_height_px": int(ui_h),
+                "quote_product_image_width_cm": float(q_w),
+                "quote_product_image_height_cm": float(q_h)
             })
             save_settings(settings)
             log_event(user_name, "Settings", "config_updated", "System configuration saved")
@@ -666,7 +683,7 @@ def template_manager_section(user, user_name):
     """Upload document templates."""
     
     if not is_admin(user):
-        st.error("🔒 Administrator privileges required to manage templates.")
+        st.error("Administrator privileges required to manage templates.")
         return
     
     st.markdown('<div class="crm-section-title">Document Templates</div>', unsafe_allow_html=True)
@@ -679,7 +696,7 @@ def template_manager_section(user, user_name):
     }
     
     for name, filename in templates.items():
-        with st.expander(f"📄 {name} Template"):
+        with st.expander(f"{name} Template"):
             path = f"data/{filename}"
             
             col1, col2 = st.columns([2, 1])
@@ -713,14 +730,14 @@ def backup_restore_section(user, user_name):
     """Backup and restore data."""
     
     if not is_admin(user):
-        st.error("🔒 Administrator privileges required for backup operations.")
+        st.error("Administrator privileges required for backup operations.")
         return
     
     # Backup section
     st.markdown('<div class="crm-section-title">Create Backup</div>', unsafe_allow_html=True)
     st.markdown('<p style="color: #6E6E73; font-size: 14px; margin-bottom: 20px;">Download a complete backup of all system data including users, products, customers, records, logs, and settings.</p>', unsafe_allow_html=True)
     
-    if st.button("📥 Download Full Backup", type="primary"):
+    if st.button("Download Full Backup", type="primary"):
         try:
             buf = BytesIO()
             with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -751,11 +768,11 @@ def backup_restore_section(user, user_name):
     </div>
     """, unsafe_allow_html=True)
     
-    restore = st.file_uploader("📤 Upload Backup ZIP File", type=["zip"], help="Select a backup file created from this system")
+    restore = st.file_uploader("Upload Backup ZIP File", type=["zip"], help="Select a backup file created from this system")
     
     if restore:
         st.markdown('<div class="spacing-sm"></div>', unsafe_allow_html=True)
-        if st.button("🔄 Restore Data", type="secondary"):
+        if st.button("Restore Data", type="secondary"):
             try:
                 with zipfile.ZipFile(restore, "r") as zf:
                     os.makedirs("data", exist_ok=True)
@@ -821,7 +838,7 @@ def log_viewer_section(user, user_name):
     st.dataframe(filtered, use_container_width=True, hide_index=True, height=400)
     
     st.markdown('<div class="spacing-sm"></div>', unsafe_allow_html=True)
-    if st.button("📊 Export to CSV", type="primary"):
+    if st.button("Export to CSV", type="primary"):
         csv = filtered.to_csv(index=False)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         st.download_button("⬇ Download CSV", csv, f"activity_logs_{ts}.csv", "text/csv")

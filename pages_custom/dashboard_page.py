@@ -131,12 +131,12 @@ def _metric(label, value, sub=""):
 
 def _app_icon_grid():
     items = [
-        ("📄\nQuotations", "quotation"),
-        ("💳\nInvoices",   "invoice"),
-        ("🧾\nReceipts",   "receipt"),
-        ("👥\nCustomers",  "customers"),
-        ("📦\nProducts",   "products"),
-        ("📊\nReports",    "reports"),
+        ("Quotations", "quotation"),
+        ("Invoices",   "invoice"),
+        ("Receipts",   "receipt"),
+        ("Customers",  "customers"),
+        ("Products",   "products"),
+        ("Reports",    "reports"),
         ("⚙️\nSettings",   "settings"),
     ]
     st.markdown('<div id="dashboard-icons"><div class="row">', unsafe_allow_html=True)
