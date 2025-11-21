@@ -281,7 +281,7 @@ def quotation_app():
 
             with cols[3]:
                 st.markdown(
-                    f"<div class='added-product-row'><span class='product-value'>AED {row['Line Total (AED)']:.2f}</span></div>",
+                    f"<div class='added-product-row'><span class='product-value'>{row['Line Total (AED)']:.2f}</span></div>",
                     unsafe_allow_html=True
                 )
 
@@ -346,7 +346,7 @@ def quotation_app():
 
         with cols[3]:
             st.markdown(
-                f"<div class='added-product-row'><span class='product-value'>AED {line_price:.2f}</span></div>",
+                f"<div class='added-product-row'><span class='product-value'>{line_price:.2f}</span></div>",
                 unsafe_allow_html=True
             )
 
