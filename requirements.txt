@@ -9,3 +9,4 @@ convertapi
 docx2pdf
 requests
 streamlit-cropper
+aspose-words

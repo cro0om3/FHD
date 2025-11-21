@@ -4,7 +4,7 @@ from base64 import b64encode
 from pages_custom.quotation_page import quotation_app
 from pages_custom.invoice_page import invoice_app
 from pages_custom.receipt_page import receipt_app
-from pages_custom.dashboard_page import dashboard_app
+from pages_custom.dashboard_new import dashboard_new_app
 from pages_custom.customers_page import customers_app
 from pages_custom.products_page import products_app
 from pages_custom.reports_page import reports_app
@@ -37,14 +37,12 @@ light_css = """
     --button-hover: #5AC8FA;
 
     --accent: #0A84FF;
-}
 
 /* Selectbox (light) – colors only */
 [data-baseweb="select"] > div {
     background: var(--bg-input) !important;
     color: var(--text) !important;
     border: 1px solid var(--border) !important;
-}
 [data-baseweb="select"] span { color: var(--text) !important; }
 [data-baseweb="popover"] {
     background: var(--bg-card) !important;
@@ -867,349 +865,6 @@ ICON_MAP = {
     "light": "☀️",
 }
 
-# Load logo as data URI
-def _load_logo_datauri():
-    candidates = ["data/newton_logo.png", "data/newton_logo.svg", "data/logo.png", "data/logo.svg"]
-    base = os.path.dirname(__file__)
-    for rel in candidates:
-        path = os.path.join(base, rel)
-        if os.path.exists(path):
-            ext = os.path.splitext(path)[1].lower()
-            mime = "image/png" if ext == ".png" else "image/svg+xml" if ext == ".svg" else None
-            if not mime:
-                continue
-            with open(path, "rb") as f:
-                data = b64encode(f.read()).decode("utf-8")
-            return f"data:{mime};base64,{data}"
-    return None
-
-st.markdown(
-    """
-    <style>
-    :root { 
-        --brand-blue:#0a84ff; /* kept for nav highlights */
-        --accent:#0a84ff; --accent-light:#5ac8fa; 
-        --ink:#1d1d1f; --sub:#6e6e73; 
-        --glass:rgba(255,255,255,.95); --glass-border:rgba(0,0,0,.06);
-        --text-primary:#1d1d1f;
-    }
-    [data-testid="stAppViewContainer"] {
-        background: linear-gradient(180deg,#fafafa 0%,#f0f0f5 100%);
-        font-family: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        color: var(--text-primary);
-    }
-    [data-testid="stHeader"] { background-color: transparent; }
-
-    .hero-card{
-        background: linear-gradient(135deg, rgba(255,255,255,.95) 0%, rgba(248,248,252,.92) 100%);
-        border: 1px solid var(--glass-border);
-        border-radius: 24px;
-        padding: 28px 32px;
-        box-shadow: 0 2px 8px rgba(0,0,0,.04), 0 12px 32px rgba(0,0,0,.08);
-        backdrop-filter: blur(20px);
-        margin-bottom: 18px;
-        overflow: visible;
-        position: relative;
-    }
-
-    /* New header layout: left (page title) | center (nav buttons) | right (logo) */
-    .header-container{
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 24px;
-        margin-bottom: 12px;
-        min-height: 80px;
-    }
-    
-    .page-title-section{
-        flex: 0 0 auto;
-        min-width: 200px;
-    }
-    
-    .page-title{
-        font-size: 28px;
-        font-weight: 700;
-        color: var(--text-primary);
-        margin: 0;
-        line-height: 1.2;
-    }
-    
-    .page-subtitle{
-        font-size: 14px;
-        color: #6e6e73;
-        margin: 4px 0 0 0;
-    }
-    
-    .nav-buttons-section{
-        flex: 1;
-        display: flex;
-        justify-content: center;
-        gap: 12px;
-    }
-    
-    .logo-section{
-        flex: 0 0 auto;
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        min-width: 200px;
-        position: absolute;
-        right: -30px;
-        top: 50%;
-        transform: translateY(-50%);
-    }
-    
-    .logo-badge{
-        width: 350px;
-        height: auto;
-        max-height: none;
-    }
-
-    /* Compact vertical rhythm */
-    [data-testid="block-container"]{ padding-top: 4px !important; }
-    div[data-testid="element-container"]{ margin-bottom: 6px !important; }
-    [data-testid="stButton"]{ margin-bottom: 0 !important; }
-
-    /* Global compact buttons (match Invoice page sizing) */
-    [data-testid="stButton"] > button{
-        background: linear-gradient(145deg,#ffffff 0%,#f9f9fb 100%) !important;
-        border: 1px solid rgba(0,0,0,.08) !important;
-        border-radius: 12px !important;
-        padding: 8px 16px !important;
-        font-size: 13px !important;
-        font-weight: 600 !important;
-        color: var(--ink) !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,.05) !important;
-        transition: all .18s ease !important;
-        white-space: nowrap !important;
-    }
-    [data-testid="stButton"] > button:hover{
-        transform: translateY(-2px) !important;
-        box-shadow: 0 6px 14px rgba(0,0,0,.12) !important;
-    }
-
-    /* Uniform compact sizing for top nav buttons (4 cards) */
-    button[key^="nav_"]{
-        min-height: 44px !important;
-        height: 44px !important;
-        padding: 6px 14px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        border-radius: 12px !important;
-        white-space: nowrap !important;
-        font-size: 13px !important;
-        line-height: 1 !important;
-    }
-    /* Sidebar items consistent height as well */
-    button[key^="sidenav_"]{
-        min-height: 44px !important;
-        height: 44px !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        border-radius: 12px !important;
-        font-size: 0.93rem !important;
-    }
-
-    /* Global form controls to match Invoice  pages */
-    /* جميع الحقول تعتمد فقط على متغيرات الثيم */
-    [data-testid="stTextInput"] input,
-    [data-testid="stNumberInput"] input,
-    [data-testid="stSelectbox"] select{
-        background: var(--bg-input) !important;
-        border: 1px solid var(--border) !important;
-        color: var(--text) !important;
-        border-radius: 12px !important;
-        padding: 10px 14px !important;
-        font-size: 14px !important;
-        box-shadow: 0 2px 6px rgba(0,0,0,.04) !important;
-        height: 40px !important;
-        outline: none !important;
-        transition: border-color .12s ease, box-shadow .12s ease !important;
-    }
-    [data-testid="stTextInput"] input:focus,
-    [data-testid="stNumberInput"] input:focus,
-    [data-testid="stSelectbox"] select:focus {
-        border-color: var(--accent) !important;
-        box-shadow: 0 0 0 3px rgba(10,132,255,.12) !important;
-    }
-    [data-testid="stTextInput"] input::placeholder,
-    [data-testid="stNumberInput"] input::placeholder{
-        color: #9ca3af !important;
-        opacity: 1 !important;
-    }
-    .stSelectbox div[data-baseweb="select"],
-    .stSelectbox div[role="combobox"],
-    .stSelectbox div[role="listbox"],
-    .stSelectbox [role="option"]{
-        background: var(--bg-input) !important;
-        color: var(--text-primary) !important;
-    }
-    .stSelectbox div[data-baseweb="select"] > div,
-    .stSelectbox div[role="combobox"] > div{
-        background: var(--bg-input) !important;
-    }
-    .stSelectbox div[data-baseweb="select"]:focus-within,
-    .stSelectbox div[role="combobox"]:focus-within{
-        background: var(--bg-input) !important;
-    }
-    .stSelectbox svg{ color: var(--text-soft) !important; }
-    /* أزرار + و - تعتمد فقط على متغيرات الثيم */
-    [data-testid="stNumberInput"] button {
-        background: var(--bg-card) !important;
-        border: 1px solid var(--border) !important;
-        color: var(--text) !important;
-        border-radius: 8px !important;
-        transition: background .15s;
-    }
-    [data-testid="stNumberInput"] button:hover {
-        background: var(--bg-input) !important;
-    }
-    .stSelectbox [role="option"][aria-selected="true"]{
-        background:#f3f4f6 !important;
-        color: var(--text-primary) !important;
-    }
-
-    /* Common utility classes from Invoice theme */
-    .section-title{ font-size:20px; font-weight:700; margin:18px `0 10px; color:var(--ink); }
-    .added-product-row{
-        background:#ffffff; padding:10px 14px; border:1px solid rgba(0,0,0,.08);
-        border-radius:12px; margin-bottom:6px; box-shadow:0 2px 6px rgba(0,0,0,.05);
-    }
-    .product-header{
-        display:flex; gap:1rem; padding:8px 0 12px;
-        border-bottom:1px solid rgba(0,0,0,.08); background:transparent;
-        font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#86868b;
-        margin-bottom:10px; align-items:center;
-    }
-    .product-header span{text-align:center;}
-    .product-header span:nth-child(1){flex:4.5; text-align:left;}
-    .product-header span:nth-child(2){flex:0.7;}
-    .product-header span:nth-child(3){flex:1;}
-    .product-header span:nth-child(4){flex:1;}
-    .product-header span:nth-child(5){flex:0.7;}
-    .product-header span:nth-child(6){flex:0.7;}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# Inject the selected theme AFTER app base CSS so theme wins in cascade
-inject_theme()
-
-# Base color mapping using variables (colors only; no sizes changed)
-st.markdown(
-    """
-    <style>
-    [data-testid="stAppViewContainer"] { background: var(--bg-primary) !important; color: var(--text) !important; }
-    [data-testid="stHeader"] { color: var(--text) !important; }
-    [data-testid="stSidebar"] { background: var(--bg-sidebar) !important; color: var(--text) !important; }
-
-    .page-subtitle { color: var(--text-soft) !important; }
-    .hero-card { background: var(--bg-card) !important; border: 1px solid var(--border-soft) !important; color: var(--text) !important; }
-
-    /* Generic buttons (neutral). Keep geometry elsewhere; colors from variables */
-    [data-testid=stButton] > button { background: var(--bg-card) !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
-    [data-testid=stButton] > button:hover { background: var(--button-hover) !important; color: #ffffff !important; }
-
-    /* Nav buttons (default neutral, active accent) */
-    button[key^="nav_"] { background: var(--bg-card) !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
-    button[key^="nav_"]:hover { background: var(--button-hover) !important; color: #ffffff !important; }
-
-    /* Sidebar buttons (default neutral, active accent set below) */
-    button[key^="sidenav_"] { background: var(--bg-card) !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
-    button[key^="sidenav_"]:hover { background: var(--button-hover) !important; color: #ffffff !important; }
-
-    /* Inputs */
-    [data-testid="stTextInput"] input,
-    [data-testid="stNumberInput"] input,
-    [data-testid="stSelectbox"] select,
-    textarea, input, select {
-        background: var(--bg-input) !important; color: var(--text) !important; border: 1px solid var(--border) !important;
-    }
-    [data-testid="stTextInput"] input::placeholder,
-    [data-testid="stNumberInput"] input::placeholder { color: var(--text-soft) !important; }
-
-    /* Streamlit Selectbox (BaseWeb) — ensure dropdown and control use variables */
-    .stSelectbox div[data-baseweb="select"],
-    .stSelectbox div[role="combobox"] {
-        background: var(--bg-input) !important;
-        color: var(--text) !important;
-        border: 1px solid var(--border) !important;
-    }
-    .stSelectbox div[data-baseweb="select"]:focus-within,
-    .stSelectbox div[role="combobox"]:focus-within {
-        border-color: var(--accent) !important;
-    }
-    .stSelectbox svg { color: var(--text) !important; }
-    .stSelectbox [role="listbox"],
-    .stSelectbox [role="option"],
-    [data-baseweb="menu"],
-    [data-baseweb="popover"] [role="listbox"] {
-        background: var(--bg-card) !important;
-        color: var(--text) !important;
-        border: 1px solid var(--border) !important;
-    }
-    .stSelectbox [role="option"][aria-selected="true"],
-    .stSelectbox [role="option"]:hover {
-        background: var(--button-hover) !important;
-        color: #ffffff !important;
-    }
-    .stSelectbox [aria-placeholder="true"],
-    .stSelectbox [data-baseweb="select"] [class*="placeholder"],
-    .stSelectbox [role="combobox"] [class*="placeholder"] {
-        color: var(--text-soft) !important;
-    }
-
-    /* Horizontal rule under subheaders or sections */
-    [data-testid="stMarkdownContainer"] hr, hr { border: none !important; border-top: 1px solid var(--border-soft) !important; }
-
-    /* Tables */
-    [data-testid="stTable"] table { background: var(--bg-card) !important; color: var(--text) !important; }
-    [data-testid="stTable"] th { color: var(--text-soft) !important; border-bottom: 1px solid var(--border) !important; }
-    [data-testid="stTable"] td { color: var(--text) !important; border-bottom: 1px solid var(--border-soft) !important; }
-
-    /* Utility */
-    .section-title { color: var(--text) !important; }
-    .added-product-row { background: var(--bg-card) !important; border: 1px solid var(--border-soft) !important; color: var(--text) !important; }
-    .product-header { border-bottom: 1px solid var(--border-soft) !important; color: var(--text-soft) !important; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-if "active_page" not in st.session_state:
-    st.session_state.active_page = "dashboard"
-
-# Page titles mapping
-PAGE_TITLES = {
-    "dashboard": ("Newton Dashboard", "Monitor live analytics"),
-    "quotation": ("Newton Quotation", "Draft elegant proposals"),
-    "invoice": ("Newton Invoice", "Bill with confidence"),
-    "receipt": ("Newton Receipt", "Acknowledge payments"),
-    "customers": ("Customers", "Manage client accounts"),
-    "products": ("Products", "Manage catalog"),
-    "reports": ("Reports", "Business insights"),
-    "settings": ("Settings", "Configure application"),
-}
-
-# Single source of truth for emojis used across nav buttons
-ICON_MAP = {
-    "dashboard": "📊",
-    "quotation": "📝",
-    "invoice": "💳",
-    "receipt": "🧾",
-    "customers": "👥",
-    "products": "📦",
-    "reports": "📈",
-    "settings": "⚙️",
-    "logout": "🚪",
-    "dark": "🌙",
-    "light": "☀️",
-}
-
 # Load logo
 _logo_uri = _load_logo_datauri()
 _logo_html = f'<img src="{_logo_uri}" alt="Newton Smart Home" class="logo-badge" />' if _logo_uri else '<div style="width:120px;height:80px;background:linear-gradient(135deg,#0a84ff,#5bc0ff);border-radius:16px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:18px;">NEWTON</div>'
@@ -1289,18 +944,7 @@ with st.sidebar:
                 st.session_state.active_page = page_id
                 st.rerun()
 
-    # Highlight active in sidebar
-    st.markdown(
-        f"""
-        <style>
-        button[key=\"sidenav_{st.session_state.active_page}\"] {{
-            background: var(--accent) !important;
-            color: #ffffff !important;
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    
 
 # Navigation buttons (will appear in the center)
 NAV_ITEMS = [
@@ -1348,8 +992,9 @@ if not can_access_page(user, current_page):
 # Log successful page access
 log_event(user.get("name", "Unknown"), current_page, "access_granted", f"Opened {current_page} page")
 
-# Route to appropriate page
-if st.session_state.active_page == "quotation":
+if st.session_state.active_page == "dashboard":
+    dashboard_new_app()
+elif st.session_state.active_page == "quotation":
     quotation_app()
 elif st.session_state.active_page == "invoice":
     invoice_app()
@@ -1361,5 +1006,7 @@ elif st.session_state.active_page == "products":
     products_app()
 elif st.session_state.active_page == "reports":
     reports_app()
+elif st.session_state.active_page == "settings":
+    settings_app()
 elif st.session_state.active_page == "settings":
     settings_app()

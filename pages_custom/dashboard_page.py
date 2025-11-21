@@ -155,14 +155,22 @@ def dashboard_app():
 
     _app_icon_grid()
 
-    records = _load_or_empty(
-        "data/records.xlsx",
-        ["base_id", "date", "type", "number", "amount", "client_name", "phone", "location", "note"],
-    )
-    customers = _load_or_empty(
-        "data/customers.xlsx",
-        ["client_name", "phone", "location", "last_activity", "status"],
-    )
+
+    try:
+        records = _load_or_empty(
+            "data/records.xlsx",
+            ["base_id", "date", "type", "number", "amount", "client_name", "phone", "location", "note"],
+        )
+    except Exception:
+        records = pd.DataFrame(columns=["base_id", "date", "type", "number", "amount", "client_name", "phone", "location", "note"])
+
+    try:
+        customers = _load_or_empty(
+            "data/customers.xlsx",
+            ["client_name", "phone", "location", "last_activity", "status"],
+        )
+    except Exception:
+        customers = pd.DataFrame(columns=["client_name", "phone", "location", "last_activity", "status"])
 
     rec = records.copy()
     if not rec.empty and "date" in rec.columns:
@@ -175,15 +183,16 @@ def dashboard_app():
     total_received = float(rec.loc[rec.get("type","") == "r", "amount"].sum()) if "amount" in rec.columns else 0.0
     remaining_balance = total_invoice_amount - total_received
 
+    # عرض الكروت دائماً حتى لو لم توجد بيانات
     c1, c2, c3 = st.columns(3)
-    with c1: _metric("Quotations", total_q, "Active proposals")
-    with c2: _metric("Invoices", total_i, "Issued bills")
-    with c3: _metric("Receipts", total_r, "Recorded payments")
+    with c1: _metric("Quotations", total_q if total_q else 0, "Active proposals")
+    with c2: _metric("Invoices", total_i if total_i else 0, "Issued bills")
+    with c3: _metric("Receipts", total_r if total_r else 0, "Recorded payments")
 
     c4, c5, c6 = st.columns(3)
-    with c4: _metric("Invoice Volume", f"AED {total_invoice_amount:,.0f}")
-    with c5: _metric("Received", f"AED {total_received:,.0f}")
-    with c6: _metric("Outstanding", f"AED {remaining_balance:,.0f}")
+    with c4: _metric("Invoice Volume", f"AED {total_invoice_amount:,.0f}" if total_invoice_amount else "AED 0",)
+    with c5: _metric("Received", f"AED {total_received:,.0f}" if total_received else "AED 0",)
+    with c6: _metric("Outstanding", f"AED {remaining_balance:,.0f}" if remaining_balance else "AED 0",)
 
     st.markdown('<div class="section-title">Top Clients</div>', unsafe_allow_html=True)
     st.markdown('<div class="table-wrap">', unsafe_allow_html=True)

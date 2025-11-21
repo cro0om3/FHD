@@ -188,39 +188,79 @@ def reports_app():
     customers = _load_customers()
     products = _load_products()
 
-    # 1) Filters
-    filtered, fvals = _apply_filters(records)
-
-    # 2) Summary metrics
-    st.markdown("<div class='section-title'>Summary</div>", unsafe_allow_html=True)
-    q_count = int(filtered[filtered["type"] == "q"].shape[0]) if not filtered.empty else 0
-    inv_sum = float(filtered[filtered["type"] == "i"]["amount"].sum()) if not filtered.empty else 0.0
-    rec_sum = float(filtered[filtered["type"] == "r"]["amount"].sum()) if not filtered.empty else 0.0
+    # 1) ملخصات المستندات
+    st.markdown("<div class='section-title'>ملخص المستندات</div>", unsafe_allow_html=True)
+    q_count = records[records["type"] == "q"].shape[0]
+    i_count = records[records["type"] == "i"].shape[0]
+    r_count = records[records["type"] == "r"].shape[0]
+    inv_sum = records[records["type"] == "i"]["amount"].sum()
+    rec_sum = records[records["type"] == "r"]["amount"].sum()
     outstanding = inv_sum - rec_sum
-    projects = filtered["base_id"].nunique() if "base_id" in filtered.columns else 0
+    projects = records["base_id"].nunique() if "base_id" in records.columns else 0
 
-    # Top customer by revenue (invoice sum)
-    top_customer = "—"
-    if not filtered.empty:
-        inv_by_cust = filtered[filtered["type"] == "i"].groupby("client_name", dropna=False)["amount"].sum().sort_values(ascending=False)
-        if not inv_by_cust.empty:
-            top_customer = f"{inv_by_cust.index[0]} (AED {inv_by_cust.iloc[0]:,.0f})"
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: _metric_card("العروض (Quotation)", f"{q_count}")
+    with c2: _metric_card("الفواتير (Invoice)", f"{i_count}")
+    with c3: _metric_card("الإيصالات (Receipt)", f"{r_count}")
+    with c4: _metric_card("الرصيد المتبقي", f"{outstanding:,.2f} AED")
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    _metric_card.__wrapped__ = _metric_card  # appease lints
-    with c1: _metric_card("Total Quotations", f"{q_count:,}")
-    with c2: _metric_card("Total Invoice Amount", f"{inv_sum:,.2f} AED")
-    with c3: _metric_card("Total Received Amount", f"{rec_sum:,.2f} AED")
-    with c4: _metric_card("Outstanding Balance", f"{outstanding:,.2f} AED")
-    with c5: _metric_card("Top Customer", top_customer)
+    st.markdown("---")
+    st.markdown("<div class='section-title'>متابعة دورة حياة المشاريع</div>", unsafe_allow_html=True)
+    # 2) جدول متابعة المشاريع
+    if not records.empty:
+        # بناء جدول لكل base_id
+        lifecycle = []
+        for base_id, group in records.groupby("base_id"):
+            client = group["client_name"].iloc[0] if "client_name" in group.columns else "—"
+            phone = group["phone"].iloc[0] if "phone" in group.columns else "—"
+            location = group["location"].iloc[0] if "location" in group.columns else "—"
+            q_row = group[group["type"] == "q"]
+            i_row = group[group["type"] == "i"]
+            r_row = group[group["type"] == "r"]
+            status_q = "✅" if not q_row.empty else "❌"
+            status_i = "✅" if not i_row.empty else "❌"
+            status_r = "✅" if not r_row.empty else "❌"
+            amt = i_row["amount"].sum() if not i_row.empty else 0.0
+            paid = r_row["amount"].sum() if not r_row.empty else 0.0
+            remain = amt - paid
+            last_update = group["date"].max() if "date" in group.columns else "—"
+            lifecycle.append({
+                "base_id": base_id,
+                "client": client,
+                "phone": phone,
+                "location": location,
+                "عرض سعر": status_q,
+                "فاتورة": status_i,
+                "إيصال": status_r,
+                "المبلغ": amt,
+                "المدفوع": paid,
+                "الرصيد": remain,
+                "آخر تحديث": last_update,
+            })
+        df_life = pd.DataFrame(lifecycle)
+        st.dataframe(df_life, use_container_width=True, hide_index=True)
+    else:
+        st.info("لا توجد مشاريع بعد.")
 
-    # 3) Documents table
+    st.markdown("---")
+    st.markdown("<div class='section-title'>توزيع المستندات</div>", unsafe_allow_html=True)
+    # 3) رسم بياني لتوزيع المستندات
+    doc_counts = pd.DataFrame({
+        "type": ["Quotation", "Invoice", "Receipt"],
+        "count": [q_count, i_count, r_count]
+    })
+    chart = alt.Chart(doc_counts).mark_bar().encode(
+        x=alt.X('type:N', title='نوع المستند'),
+        y=alt.Y('count:Q', title='عدد المستندات'),
+        color=alt.Color('type:N', scale=alt.Scale(range=['#0a84ff','#ff9f0a','#34c759']))
+    ).properties(height=220)
+    st.altair_chart(chart, use_container_width=True)
+
+    # 3) جدول المستندات الكامل
     st.markdown("---")
     st.markdown("<div class='section-title'>Documents</div>", unsafe_allow_html=True)
-
-    if not filtered.empty:
-        view = filtered.copy()
-        # Order columns for view
+    if not records.empty:
+        view = records.copy()
         cols = [
             "date","type","number","client_name","phone","location","amount","base_id","note"
         ]
@@ -228,7 +268,6 @@ def reports_app():
         view = view[cols].sort_values(by=["date"], ascending=False)
         st.dataframe(view, use_container_width=True, hide_index=True)
 
-        # Exports
         buf_xlsx = BytesIO()
         view.to_excel(buf_xlsx, index=False)
         buf_xlsx.seek(0)
@@ -237,15 +276,14 @@ def reports_app():
         buf_csv = BytesIO(view.to_csv(index=False).encode("utf-8"))
         st.download_button("Export CSV", buf_csv, file_name="documents_report.csv")
     else:
-        st.info("No documents match your filters.")
+        st.info("No documents found.")
 
     # 4) Financial analytics
     st.markdown("---")
     st.markdown("<div class='section-title'>Financial Analytics</div>", unsafe_allow_html=True)
-
-    if not filtered.empty and "date" in filtered.columns:
-        df_i = filtered[filtered["type"] == "i"][['date','amount']].copy()
-        df_r = filtered[filtered["type"] == "r"][['date','amount']].copy()
+    if not records.empty and "date" in records.columns:
+        df_i = records[records["type"] == "i"][['date','amount']].copy()
+        df_r = records[records["type"] == "r"][['date','amount']].copy()
         if not df_i.empty:
             df_i['month'] = df_i['date'].dt.to_period('M').dt.to_timestamp()
             inv_month = df_i.groupby('month')['amount'].sum().reset_index()
@@ -326,9 +364,9 @@ def reports_app():
     st.markdown("---")
     st.markdown("<div class='section-title'>Exporting</div>", unsafe_allow_html=True)
 
-    # Full report = filtered documents as Excel
+    # Full report = جميع المستندات
     full_buf = BytesIO()
-    (filtered if not filtered.empty else records).to_excel(full_buf, index=False)
+    records.to_excel(full_buf, index=False)
     full_buf.seek(0)
     st.download_button("Download Full Report (Excel)", full_buf, file_name="full_report.xlsx")
 
@@ -339,11 +377,8 @@ def reports_app():
         {"Metric":"Total Received Amount","Value": rec_sum},
         {"Metric":"Outstanding Balance","Value": outstanding},
         {"Metric":"Total Projects","Value": projects},
-        {"Metric":"Top Customer","Value": top_customer},
     ])
     sum_buf = BytesIO()
     summary_df.to_excel(sum_buf, index=False)
     sum_buf.seek(0)
     st.download_button("Download Summary Only (Excel)", sum_buf, file_name="summary_report.xlsx")
-
-cd "C:\Users\o-fmalhamadi\Desktop\Project\quotation_app"

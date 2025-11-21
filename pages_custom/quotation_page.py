@@ -28,7 +28,14 @@ def proper_case(text):
 # Apply the same visual theme used in dashboard_page.py
 def _apply_quotation_theme():
     # Now inherits global Invoice theme from main.py
-    st.markdown("<style></style>", unsafe_allow_html=True)
+    st.markdown(
+        '''<meta name="viewport" content="width=device-width, initial-scale=0.47, maximum-scale=0.47, user-scalable=no">
+        <style>
+        @media only screen and (max-width: 600px) {
+            body { zoom: 0.47 !important; }
+        }
+        </style>
+        ''', unsafe_allow_html=True)
 
 def quotation_app():
     _apply_quotation_theme()
@@ -544,8 +551,9 @@ def quotation_app():
             for cell in row.cells:
                 format_cell(cell, "Arial MT", 9, WD_ALIGN_PARAGRAPH.CENTER)
 
+        # حذف الصفوف الفارغة بعد المنتجات وأيضاً صف 'last' نفسه
         delete_start = start_row + len(products)
-        for j in range(last_index - 1, delete_start - 1, -1):
+        for j in range(last_index, delete_start - 1, -1):
             row = target_table.rows[j]
             target_table._tbl.remove(row._tr)
 
@@ -556,7 +564,7 @@ def quotation_app():
 
     def convert_to_pdf(word_buffer: BytesIO) -> bytes:
         # Use official ConvertAPI SDK; write temp DOCX then convert
-        convertapi.api_credentials = 'HESPs6JNV4IDP62WkWpZe3u7ls8KJA38'
+        convertapi.api_credentials = 'kbUBO3z9214I9rxEoRQwhkProocqlwJD'
         with tempfile.TemporaryDirectory() as tmpdir:
             docx_path = os.path.join(tmpdir, 'quotation.docx')
             with open(docx_path, 'wb') as f:
@@ -658,13 +666,13 @@ def quotation_app():
         "{{grand_total}}": f"{grand_total:,.2f}",
     }
 
-    # Always show the two action buttons side-by-side
-    b1, b2 = st.columns(2)
-
-    # Simple, invoice-style: pre-render a download_button for Word
-    with b1:
-        try:
-            word_ready = generate_word_file(data_to_fill)
+    # زرّان بجانب بعض: تحميل Word وPDF في نفس الصف
+    try:
+        word_ready = generate_word_file(data_to_fill)
+        export_cols = st.columns([1,1])
+        pdf_ready = st.session_state.get("pdf_ready_quo")
+        clicked_word = None
+        with export_cols[0]:
             clicked_word = st.download_button(
                 label="Download Word",
                 data=word_ready.getvalue(),
@@ -672,71 +680,44 @@ def quotation_app():
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 key=f"dl_word_{quote_no}"
             )
-            if clicked_word:
-                # Save record after user downloads (same behavior as invoice)
-                today_id = datetime.today().strftime('%Y%m%d')
-                existing = load_records()
-                if not existing.empty and "base_id" in existing.columns:
-                    same_day = existing[existing.get("base_id", "").astype(str).str.contains(today_id, na=False)]
-                    seq = len(same_day) + 1
-                else:
-                    seq = 1
-                base_id = f"{today_id}-{str(seq).zfill(3)}"
-                save_record({
-                    "base_id": base_id,
-                    "date": datetime.today().strftime('%Y-%m-%d'),
-                    "type": "q",
-                    "number": quote_no,
-                    "amount": grand_total,
-                    "client_name": client_name,
-                    "phone": phone_raw,
-                    "location": client_location,
-                    "note": ""
-                })
-                upsert_customer_from_quotation(client_name, phone_raw, client_location)
-                # Log quotation creation
-                user = st.session_state.get("user", {})
-                log_event(user.get("name", "Unknown"), "Quotation", "quotation_created", 
-                         f"Client: {client_name}, Amount: {grand_total}")
-                st.success(f"✅ Saved quotation to records with base {base_id}")
-        except Exception as e:
-            st.error(f"❌ Unable to prepare Word file: {e}")
-
-    # PDF: keep a click-to-generate then download button for reliability
-    with b2:
-        try:
-            # Pre-generate PDF bytes for single-click download (may take a moment)
-            word_for_pdf = generate_word_file(data_to_fill)
-            pdf_ready = convert_to_pdf(word_for_pdf)
-            clicked_pdf = st.download_button(
-                label="Download PDF",
-                data=pdf_ready,
-                file_name=f"Quotation_{client_name}_{quote_no}.pdf",
-                mime="application/pdf",
-                key=f"dl_pdf_{quote_no}"
-            )
-            if clicked_pdf:
-                today_id = datetime.today().strftime('%Y%m%d')
-                existing = load_records()
-                if not existing.empty and "base_id" in existing.columns:
-                    same_day = existing[existing.get("base_id", "").astype(str).str.contains(today_id, na=False)]
-                    seq = len(same_day) + 1
-                else:
-                    seq = 1
-                base_id = f"{today_id}-{str(seq).zfill(3)}"
-                save_record({
-                    "base_id": base_id,
-                    "date": datetime.today().strftime('%Y-%m-%d'),
-                    "type": "q",
-                    "number": quote_no,
-                    "amount": grand_total,
-                    "client_name": client_name,
-                    "phone": phone_raw,
-                    "location": client_location,
-                    "note": "PDF"
-                })
-                upsert_customer_from_quotation(client_name, phone_raw, client_location)
-                st.success(f"✅ Saved PDF quotation with base {base_id}")
-        except Exception as e:
-            st.error(f"❌ Unable to prepare PDF: {e}")
+        if clicked_word:
+            # حفظ السجل وتحديث العملاء
+            today_id = datetime.today().strftime('%Y%m%d')
+            existing = load_records()
+            if not existing.empty and "base_id" in existing.columns:
+                same_day = existing[existing.get("base_id", "").astype(str).str.contains(today_id, na=False)]
+                seq = len(same_day) + 1
+            else:
+                seq = 1
+            base_id = f"{today_id}-{str(seq).zfill(3)}"
+            save_record({
+                "base_id": base_id,
+                "date": datetime.today().strftime('%Y-%m-%d'),
+                "type": "q",
+                "number": quote_no,
+                "amount": grand_total,
+                "client_name": client_name,
+                "phone": phone_raw,
+                "location": client_location,
+                "note": ""
+            })
+            upsert_customer_from_quotation(client_name, phone_raw, client_location)
+            user = st.session_state.get("user", {})
+            log_event(user.get("name", "Unknown"), "Quotation", "quotation_created", 
+                     f"Client: {client_name}, Amount: {grand_total}")
+            st.success(f"✅ Saved quotation to records with base {base_id}")
+            # توليد PDF بعد نجاح تحميل Word وتخزينه في session_state
+            pdf_ready = convert_to_pdf(word_ready)
+            st.session_state["pdf_ready_quo"] = pdf_ready
+        with export_cols[1]:
+            if pdf_ready:
+                st.download_button(
+                    label="Download PDF",
+                    data=pdf_ready,
+                    file_name=f"Quotation_{client_name}_{quote_no}.pdf",
+                    mime="application/pdf",
+                    key=f"dl_pdf_after_word_{quote_no}"
+                )
+    except Exception as e:
+        st.error(f"❌ Unable to prepare Word/PDF file: {e}")
 

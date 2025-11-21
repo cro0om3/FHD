@@ -42,3 +42,21 @@ CMD ["streamlit", "run", "main.py", "--server.port=8501", "--server.address=0.0.
 - `pages_custom/` – pages: quotation, invoice, receipt, customers, products
 - `data/` – Word templates and runtime Excel files
 - `requirements.txt` – Python dependencies
+
+## Pages
+- `home.py` – Home page
+- `quotation.py` – Quotation page
+- `invoice.py` – Invoice page
+- `receipt.py` – Receipt page
+- `customers.py` – Customers page
+- `products.py` – Products page
+- `dashboard.py` – Dashboard page
+
+## Active Page Logic
+- `home.py` – Home page
+- `quotation.py` – Quotation page
+- `invoice.py` – Invoice page
+- `receipt.py` – Receipt page
+- `customers.py` – Customers page
+- `products.py` – Products page
+- `dashboard.py` – Dashboard page
