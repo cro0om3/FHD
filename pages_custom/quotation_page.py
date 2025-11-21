@@ -505,7 +505,11 @@ def quotation_app():
                         new = new.replace(key, "" if val is None else str(val))
                     if old != new:
                         cell.text = new
-                        format_cell(cell, "Times New Roman (Headings CS)", 10, WD_ALIGN_PARAGRAPH.LEFT)
+                        # إذا كانت الخلية تحتوي على قيمة QTY بعد الاستبدال، اجعل المحاذاة Center
+                        if "{{QTY}}" in old or (str(data.get("{{QTY}}")) in new and "QTY" in old):
+                            format_cell(cell, "Times New Roman (Headings CS)", 10, WD_ALIGN_PARAGRAPH.CENTER)
+                        else:
+                            format_cell(cell, "Times New Roman (Headings CS)", 10, WD_ALIGN_PARAGRAPH.LEFT)
 
         # Insert products from session state
         products = st.session_state.product_table.to_dict("records") if "product_table" in st.session_state else []
@@ -646,6 +650,12 @@ def quotation_app():
     total_discount = percent_value + discount_value_val
     grand_total = (product_total + installation_cost_val) - total_discount
 
+    qty_sum = (
+        st.session_state.product_table["Qty"].sum()
+        if not st.session_state.product_table.empty
+        else 0
+    )
+
     data_to_fill = {
         "{{client_name}}": client_name,
         "{{quote_no}}": quote_no,
@@ -659,6 +669,7 @@ def quotation_app():
         "{{installation_cost}}": f"{installation_cost_val:,.2f}",
         "{{Price}}": f"{product_total:,.2f}",
         "{{Total}}": f"{grand_total:,.2f}",
+        "{{QTY}}": qty_sum,
         # Extra keys (no-op if not present in template)
         "{{discount_value}}": f"{discount_value_val:,.2f}",
         "{{discount_percent}}": f"{discount_percent_val:,.0f}",
