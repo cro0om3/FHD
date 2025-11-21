@@ -104,7 +104,7 @@ def quotation_app():
 
     required_cols = ["Device", "Description", "UnitPrice", "Warranty"]
     for col in required_cols:
-        if col not in catalog.columns:
+            cols = st.columns([4,0.7,1,1,0.9,0.7])
             st.error(f"❌ Missing column: {col}")
             return
 
@@ -136,7 +136,7 @@ def quotation_app():
             cols = [
                 "client_name","phone","location","email","status",
                 "notes","tags","next_follow_up","assigned_to","last_activity"
-            ]
+        cols = st.columns([4,0.7,1,1,0.9,0.7])
             pd.DataFrame(columns=cols).to_excel(path, index=False)
 
     def load_customers():
