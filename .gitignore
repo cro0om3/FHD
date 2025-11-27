@@ -1,6 +1,14 @@
+env/
+build/
+dist/
+.coverage
+data/*.xlsx
+
 # Python / Streamlit
 __pycache__/
-*.py[cod]
+*.pyc
+*.pyo
+*.pyd
 *.egg-info/
 .venv/
 venv/
@@ -23,11 +31,24 @@ dist/
 .coverage
 
 # Streamlit
-.streamlit/secrets.toml
-.streamlit/credentials.toml
+.streamlit/
 
 # App data (keep templates & logos, ignore runtime Excel data)
 data/*.xlsx
 !data/*.docx
 !data/*.png
 !data/*.svg
+*.db
+*.log
+*.bak
+*.swp
+*.swo
+*.tmp
+*.orig
+*.egg-info/
+# Jupyter
+.ipynb_checkpoints/
+# VSCode
+.history/
+# Windows
+Thumbs.db
